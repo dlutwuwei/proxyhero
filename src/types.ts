@@ -1,0 +1,119 @@
+export interface HttpMessage {
+  headers: [string, string][];
+  body: string;
+  bodyBase64?: string;
+  isBinary: boolean;
+  size: number;
+  truncated?: boolean;
+}
+
+export interface Session {
+  id: string;
+  startedAt: string;
+  method: string;
+  url: string;
+  host: string;
+  path: string;
+  scheme: string;
+  isHttps: boolean;
+  status?: number;
+  durationMs?: number;
+  requestSize: number;
+  responseSize?: number;
+  request?: HttpMessage;
+  response?: HttpMessage;
+  mappedRuleId?: string;
+  mappedRuleName?: string;
+  mapType?: string;
+  sslTunnel: boolean;
+  completed: boolean;
+  clientAddr?: string;
+  userAgent?: string;
+  clientName?: string;
+}
+
+export interface MapRemoteRule {
+  id: string;
+  enabled: boolean;
+  name: string;
+  order: number;
+  matchRule: MatchRule;
+  mapTo: MapToTarget;
+}
+
+export interface MapLocalRule {
+  id: string;
+  enabled: boolean;
+  name: string;
+  order: number;
+  matchRule: MatchRule;
+  localFile: string;
+  status: number;
+  headers: Record<string, string>;
+}
+
+export interface MatchRule {
+  protocol?: string;
+  host: string;
+  path?: string;
+}
+
+export interface MapToTarget {
+  protocol: string;
+  host: string;
+  port: number;
+  preservePath: boolean;
+  preserveQuery: boolean;
+}
+
+export type SslMode = "default" | "include" | "exclude";
+
+export interface SslConfig {
+  mode: SslMode;
+  includeHosts: string[];
+  excludeHosts: string[];
+}
+
+export interface AppRules {
+  mapRemote: MapRemoteRule[];
+  mapLocal: MapLocalRule[];
+  ssl: SslConfig;
+  allowedMapHosts: string[];
+}
+
+export interface AppConfig {
+  proxyPort: number;
+  maxSessions: number;
+  captureEnabled: boolean;
+  systemProxyEnabled: boolean;
+}
+
+export interface ProxyStatus {
+  running: boolean;
+  port: number;
+  sessionCount: number;
+  lanIp?: string;
+}
+
+export interface CertInfo {
+  exists: boolean;
+  path: string;
+  fingerprint?: string;
+  installedHint: string;
+}
+
+export interface CertDiagnostic {
+  caFingerprint?: string;
+  keychainFingerprint?: string;
+  fingerprintsMatch: boolean;
+  keychainTrusted: boolean;
+  hints: string[];
+}
+
+export interface Preset {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export type NavPage = "traffic" | "rules" | "ssl" | "certificate" | "settings";
