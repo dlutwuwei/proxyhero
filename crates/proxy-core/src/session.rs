@@ -51,7 +51,14 @@ pub enum SessionEvent {
 }
 
 impl Session {
-    pub fn new(id: String, method: String, url: String, host: String, path: String, scheme: String) -> Self {
+    pub fn new(
+        id: String,
+        method: String,
+        url: String,
+        host: String,
+        path: String,
+        scheme: String,
+    ) -> Self {
         let is_https = scheme == "https";
         Self {
             id,
@@ -90,20 +97,11 @@ pub fn user_agent_from_headers(headers: &http::HeaderMap) -> Option<String> {
 pub fn headers_from_http(headers: &http::HeaderMap) -> Vec<(String, String)> {
     headers
         .iter()
-        .map(|(k, v)| {
-            (
-                k.to_string(),
-                v.to_str().unwrap_or("<binary>").to_string(),
-            )
-        })
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("<binary>").to_string()))
         .collect()
 }
 
-pub fn body_from_bytes(
-    bytes: &[u8],
-    content_type: Option<&str>,
-    full_size: usize,
-) -> HttpMessage {
+pub fn body_from_bytes(bytes: &[u8], content_type: Option<&str>, full_size: usize) -> HttpMessage {
     let truncated = full_size > bytes.len();
     let size = full_size;
     let is_binary = content_type

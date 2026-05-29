@@ -25,9 +25,7 @@ fn request_body_for_curl(req: &HttpMessage) -> Option<String> {
     }
     let b64 = req.body_base64.as_ref()?;
     use base64::Engine;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(b64)
-        .ok()?;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
     String::from_utf8(bytes).ok().filter(|s| !s.is_empty())
 }
 
@@ -36,7 +34,10 @@ pub fn format_session_curl(session: &Session) -> String {
         let target = format!("{}://{}/", session.scheme, session.host);
         let mut lines = vec![
             "# HTTPS proxy tunnel (CONNECT)".to_string(),
-            format!("curl -x <proxy-host>:<port> {}", shell_single_quoted(&target)),
+            format!(
+                "curl -x <proxy-host>:<port> {}",
+                shell_single_quoted(&target)
+            ),
         ];
         if let Some(req) = &session.request {
             for (k, v) in &req.headers {

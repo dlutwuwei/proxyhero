@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../api/tauri";
 import { ProxyToggleButton, useProxyEnabled } from "../components/ProxyControl";
 import { useT } from "../hooks/useT";
+import { useUpdater } from "../hooks/useUpdater";
 import { useAppStore } from "../stores/appStore";
 import { useLocaleStore } from "../stores/localeStore";
 import { useTrafficStore } from "../stores/trafficStore";
 import type { Locale } from "../i18n/messages";
+
+const CURRENT_VERSION = "0.1.0";
 
 export function SettingsView() {
   const t = useT();
@@ -17,6 +20,15 @@ export function SettingsView() {
   const setLocale = useLocaleStore((s) => s.setLocale);
   const [hint, setHint] = useState("");
   const [port, setPort] = useState(8888);
+  const { 
+    checking, 
+    updateAvailable, 
+    updateInfo, 
+    downloading, 
+    downloadProgress, 
+    checkForUpdates, 
+    installUpdate 
+  } = useUpdater();
 
   useEffect(() => {
     if (config) setPort(config.proxyPort);
@@ -101,6 +113,58 @@ export function SettingsView() {
             />
           </button>
         </div>
+      </section>
+
+      <section className="mb-6 max-w-lg rounded border border-[#333] bg-[#252526] p-4">
+        <h3 className="mb-3 text-sm font-medium">{t("updates.title")}</h3>
+        <p className="mb-3 text-xs text-[#888]">
+          {t("updates.currentVersion")}: {CURRENT_VERSION}
+        </p>
+        
+        {updateAvailable && updateInfo && (
+          <div className="mb-3 rounded border border-blue-500/30 bg-blue-500/10 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-blue-400">
+                {t("updates.updateAvailable")}
+              </span>
+              <span className="mono text-xs text-blue-300">
+                {t("updates.version")}: {updateInfo.version}
+              </span>
+            </div>
+            {updateInfo.body && (
+              <div className="mb-3">
+                <p className="text-xs text-[#888] mb-1">{t("updates.releaseNotes")}:</p>
+                <pre className="text-xs text-[#aaa] whitespace-pre-wrap max-h-32 overflow-auto">
+                  {updateInfo.body}
+                </pre>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={installUpdate}
+              disabled={downloading}
+              className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {downloading ? `${t("updates.downloading")} ${downloadProgress}%` : t("updates.install")}
+            </button>
+          </div>
+        )}
+        
+        <button
+          type="button"
+          onClick={checkForUpdates}
+          disabled={checking || downloading}
+          className="w-full rounded bg-[#333] px-3 py-2 text-sm hover:bg-[#444] disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {checking ? t("updates.checking") : t("updates.check")}
+        </button>
+      </section>
+
+      <section className="mb-6 max-w-lg rounded border border-[#333] bg-[#252526] p-4">
+        <h3 className="mb-3 text-sm font-medium">{t("notifications.title")}</h3>
+        <p className="text-xs text-[#888]">
+          {t("notifications.checkReleases")}
+        </p>
       </section>
 
       <section className="max-w-lg rounded border border-[#333] bg-[#252526] p-4">

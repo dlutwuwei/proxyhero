@@ -11,16 +11,15 @@ const CACHE_TTL: u64 = TTL_SECS as u64 / 2;
 const NOT_BEFORE_OFFSET: i64 = 60;
 use http::uri::Authority;
 use hudsucker::rcgen::{
-    CertificateParams, DistinguishedName, DnType, Issuer, KeyPair, SanType,
-    string::Ia5String,
+    string::Ia5String, CertificateParams, DistinguishedName, DnType, Issuer, KeyPair, SanType,
 };
-use moka::future::Cache;
-use rand::Rng;
-use rand::rng;
-use time::{Duration, OffsetDateTime};
 use hudsucker::rustls::crypto::CryptoProvider;
 use hudsucker::rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use hudsucker::rustls::ServerConfig;
+use moka::future::Cache;
+use rand::rng;
+use rand::Rng;
+use time::{Duration, OffsetDateTime};
 use tracing::debug;
 
 pub struct IpAwareRcgenAuthority {
@@ -31,7 +30,11 @@ pub struct IpAwareRcgenAuthority {
 }
 
 impl IpAwareRcgenAuthority {
-    pub fn new(issuer: Issuer<'static, KeyPair>, cache_size: u64, provider: CryptoProvider) -> Self {
+    pub fn new(
+        issuer: Issuer<'static, KeyPair>,
+        cache_size: u64,
+        provider: CryptoProvider,
+    ) -> Self {
         let private_key =
             PrivateKeyDer::from(PrivatePkcs8KeyDer::from(issuer.key().serialize_der()));
         Self {

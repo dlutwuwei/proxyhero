@@ -78,17 +78,8 @@ pub fn find_map_local<'a>(
 
 pub fn should_mitm_ssl(ssl: &SslConfig, host: &str) -> bool {
     match ssl.mode {
-        SslMode::Default => !ssl
-            .exclude_hosts
-            .iter()
-            .any(|p| host_matches(p, host)),
-        SslMode::Include => ssl
-            .include_hosts
-            .iter()
-            .any(|p| host_matches(p, host)),
-        SslMode::Exclude => !ssl
-            .exclude_hosts
-            .iter()
-            .any(|p| host_matches(p, host)),
+        SslMode::Default => !ssl.exclude_hosts.iter().any(|p| host_matches(p, host)),
+        SslMode::Include => ssl.include_hosts.iter().any(|p| host_matches(p, host)),
+        SslMode::Exclude => !ssl.exclude_hosts.iter().any(|p| host_matches(p, host)),
     }
 }

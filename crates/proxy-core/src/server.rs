@@ -7,9 +7,9 @@ use crate::ca::IpAwareRcgenAuthority;
 use hudsucker::rcgen::{
     BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair, KeyUsagePurpose,
 };
-use time::{Duration, OffsetDateTime};
 use hudsucker::rustls::crypto::aws_lc_rs;
 use hudsucker::Proxy;
+use time::{Duration, OffsetDateTime};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -134,8 +134,5 @@ fn ca_needs_regenerate(cert_path: &Path) -> bool {
 }
 
 pub fn cert_paths(cert_dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
-    (
-        cert_dir.join(CA_CERT_FILE),
-        cert_dir.join(CA_KEY_FILE),
-    )
+    (cert_dir.join(CA_CERT_FILE), cert_dir.join(CA_KEY_FILE))
 }

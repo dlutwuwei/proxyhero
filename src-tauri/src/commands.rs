@@ -1,14 +1,11 @@
 use proxy_core::{
-    builtin_presets, AppRules, CA_CERT_FILE, Preset, Session, SessionEvent, SharedState,
+    builtin_presets, AppRules, Preset, Session, SessionEvent, SharedState, CA_CERT_FILE,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::cert::{self, CertDiagnostic, CertInfo};
-use crate::config::{
-    cert_dir, config_path, rules_path, save_config,
-    save_rules, AppConfig,
-};
+use crate::config::{cert_dir, config_path, rules_path, save_config, save_rules, AppConfig};
 use crate::state::AppState;
 use crate::system_proxy::{self, get_lan_ip, manual_proxy_hint};
 
@@ -35,24 +32,24 @@ pub async fn get_proxy_status(state: State<'_, AppState>) -> Result<ProxyStatus,
     let config = state.config.lock().await;
     let server = state.proxy_server.lock().await;
     let count = state.shared.sessions.read().await.len();
-    Ok(proxy_status(
-        server.is_running(),
-        config.proxy_port,
-        count,
-    ))
+    Ok(proxy_status(server.is_running(), config.proxy_port, count))
 }
 
 #[tauri::command]
-pub async fn start_proxy(app: AppHandle, state: State<'_, AppState>) -> Result<ProxyStatus, String> {
+pub async fn start_proxy(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ProxyStatus, String> {
     state.sync_rules_to_proxy().await;
     let port = state.config.lock().await.proxy_port;
     let cdir = cert_dir(&state.data_dir);
     let mut server = state.proxy_server.lock().await;
     if !server.is_running() {
-        server
-            .start(port, &cdir, state.shared.clone())
-            .await?;
-        let _ = app.emit("proxy:status", serde_json::json!({ "running": true, "port": port }));
+        server.start(port, &cdir, state.shared.clone()).await?;
+        let _ = app.emit(
+            "proxy:status",
+            serde_json::json!({ "running": true, "port": port }),
+        );
     }
     drop(server);
     get_proxy_status(state).await
@@ -74,10 +71,7 @@ pub async fn clear_sessions(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn clear_session(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn clear_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     state.shared.clear_session(&session_id).await;
     Ok(())
 }
@@ -86,10 +80,7 @@ pub async fn clear_session(
 pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<Session>, String> {
     let order = state.shared.session_order.read().await;
     let map = state.shared.sessions.read().await;
-    Ok(order
-        .iter()
-        .filter_map(|id| map.get(id).cloned())
-        .collect())
+    Ok(order.iter().filter_map(|id| map.get(id).cloned()).collect())
 }
 
 #[tauri::command]
@@ -97,20 +88,11 @@ pub async fn get_session(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<Option<Session>, String> {
-    Ok(state
-        .shared
-        .sessions
-        .read()
-        .await
-        .get(&session_id)
-        .cloned())
+    Ok(state.shared.sessions.read().await.get(&session_id).cloned())
 }
 
 #[tauri::command]
-pub async fn set_capture_paused(
-    state: State<'_, AppState>,
-    paused: bool,
-) -> Result<(), String> {
+pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Result<(), String> {
     state
         .shared
         .capture_paused
@@ -124,10 +106,7 @@ pub async fn get_rules(state: State<'_, AppState>) -> Result<AppRules, String> {
 }
 
 #[tauri::command]
-pub async fn save_rules_cmd(
-    state: State<'_, AppState>,
-    rules: AppRules,
-) -> Result<(), String> {
+pub async fn save_rules_cmd(state: State<'_, AppState>, rules: AppRules) -> Result<(), String> {
     save_rules(&rules_path(&state.data_dir), &rules).await?;
     *state.rules.lock().await = rules.clone();
     state.sync_rules_to_proxy().await;
@@ -140,10 +119,7 @@ pub async fn get_config(state: State<'_, AppState>) -> Result<AppConfig, String>
 }
 
 #[tauri::command]
-pub async fn save_config_cmd(
-    state: State<'_, AppState>,
-    config: AppConfig,
-) -> Result<(), String> {
+pub async fn save_config_cmd(state: State<'_, AppState>, config: AppConfig) -> Result<(), String> {
     save_config(&config_path(&state.data_dir), &config).await?;
     *state.config.lock().await = config;
     Ok(())
@@ -165,9 +141,10 @@ pub async fn apply_preset(
         .ok_or_else(|| "preset not found".to_string())?;
     let mut rules = state.rules.lock().await.clone();
     for r in preset.map_remote {
-        let dup = rules.map_remote.iter().any(|x| {
-            x.match_rule.host == r.match_rule.host && x.map_to.port == r.map_to.port
-        });
+        let dup = rules
+            .map_remote
+            .iter()
+            .any(|x| x.match_rule.host == r.match_rule.host && x.map_to.port == r.map_to.port);
         if !dup {
             rules.map_remote.push(r);
         }
@@ -214,9 +191,7 @@ pub async fn install_ca(state: State<'_, AppState>) -> Result<String, String> {
         let cdir = cert_dir(&state.data_dir);
         let mut server = state.proxy_server.lock().await;
         server.stop().await;
-        server
-            .start(port, &cdir, state.shared.clone())
-            .await?;
+        server.start(port, &cdir, state.shared.clone()).await?;
         msg.push_str(" 已自动重启代理以加载当前 CA。");
     }
     Ok(msg)
@@ -237,10 +212,7 @@ pub fn open_cert_dir(state: State<'_, AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn set_system_proxy(
-    state: State<'_, AppState>,
-    enable: bool,
-) -> Result<String, String> {
+pub async fn set_system_proxy(state: State<'_, AppState>, enable: bool) -> Result<String, String> {
     let mut config = state.config.lock().await.clone();
     let port = config.proxy_port;
     let host = "127.0.0.1";

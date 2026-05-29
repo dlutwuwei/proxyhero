@@ -261,7 +261,9 @@ fn set_proxy_impl(host: &str, port: u16) -> Result<String, String> {
         .output()
         .map_err(|e| e.to_string())?;
     if output.status.success() {
-        Ok(format!("系统代理已设为 {proxy}（已清空调试绕过，可抓取 IP 访问）"))
+        Ok(format!(
+            "系统代理已设为 {proxy}（已清空调试绕过，可抓取 IP 访问）"
+        ))
     } else {
         Err(String::from_utf8_lossy(&output.stderr).into_owned())
     }
@@ -314,7 +316,10 @@ fn set_proxy_impl(host: &str, port: u16) -> Result<String, String> {
             "请手动设置代理 {host}:{port}，并删除 ignore-hosts 中的内网 IP 段"
         ));
     }
-    for schema in ["org.gnome.system.proxy.http", "org.gnome.system.proxy.https"] {
+    for schema in [
+        "org.gnome.system.proxy.http",
+        "org.gnome.system.proxy.https",
+    ] {
         let _ = Command::new("gsettings")
             .args(["set", schema, "host", host])
             .output();

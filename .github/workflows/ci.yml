@@ -12,13 +12,56 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  lint:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
 
       - name: Rust setup
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './ -> target'
+          key: lint
+
+      - name: Cargo fmt check
+        run: cargo fmt --all -- --check
+
+      - name: Cargo clippy
+        run: cargo clippy -p proxy-core --all-targets
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Sync node version
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm exec tsc --noEmit
+
+  test:
+    needs: lint
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.88.0
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -30,23 +73,14 @@ jobs:
 
   build:
     needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-
       - name: Rust setup
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.88.0
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -56,7 +90,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - name: Sync node version
         uses: actions/setup-node@v5
@@ -71,6 +105,19 @@ jobs:
         run: pnpm build
 
       - name: Build Tauri app (without signing)
+        id: tauri-build
         uses: tauri-apps/tauri-action@v0
         with:
           args: '--debug'
+
+      - name: Upload debug artifacts
+        if: always() && steps.tauri-build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxyhero-debug-${{ github.run_id }}
+          path: |
+            target/debug/bundle/macos/*.dmg
+            target/debug/bundle/macos/*.app.tar.gz
+            target/debug/bundle/macos/*.app.tar.gz.sig
+          if-no-files-found: warn
+          retention-days: 7

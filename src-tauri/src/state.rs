@@ -3,7 +3,7 @@ use std::sync::Arc;
 use proxy_core::{AppRules, ProxyServer, SharedState};
 use tokio::sync::Mutex;
 
-use crate::config::{AppConfig, cert_dir};
+use crate::config::{cert_dir, AppConfig};
 
 pub struct AppState {
     pub proxy_server: Mutex<ProxyServer>,

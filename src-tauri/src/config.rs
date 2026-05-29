@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use proxy_core::AppRules;
-use tauri::Manager;
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,9 +25,7 @@ impl Default for AppConfig {
 }
 
 pub fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())
+    app.path().app_data_dir().map_err(|e| e.to_string())
 }
 
 pub fn rules_path(data_dir: &Path) -> PathBuf {

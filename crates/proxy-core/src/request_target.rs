@@ -20,22 +20,14 @@ fn port_from_host_header(headers: &HeaderMap) -> Option<u16> {
     if host.starts_with('[') {
         let rest = host.strip_prefix('[')?;
         let (_addr, tail) = rest.split_once(']')?;
-        return tail
-            .strip_prefix(':')
-            .and_then(|p| p.parse().ok());
+        return tail.strip_prefix(':').and_then(|p| p.parse().ok());
     }
     host.rsplit_once(':')
-        .and_then(|(left, port_str)| {
-            port_str
-                .parse::<u16>()
-                .ok()
-                .filter(|_| !left.is_empty())
-        })
+        .and_then(|(left, port_str)| port_str.parse::<u16>().ok().filter(|_| !left.is_empty()))
 }
 
 fn resolve_port(uri: &Uri, headers: &HeaderMap) -> Option<u16> {
-    uri.port_u16()
-        .or_else(|| port_from_host_header(headers))
+    uri.port_u16().or_else(|| port_from_host_header(headers))
 }
 
 fn tunnel_scheme(port: Option<u16>) -> &'static str {

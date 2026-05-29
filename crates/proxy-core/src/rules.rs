@@ -74,10 +74,7 @@ impl Default for SslConfig {
         Self {
             mode: SslMode::Default,
             include_hosts: vec![],
-            exclude_hosts: vec![
-                "*.apple.com".to_string(),
-                "*.mzstatic.com".to_string(),
-            ],
+            exclude_hosts: vec!["*.apple.com".to_string(), "*.mzstatic.com".to_string()],
         }
     }
 }
@@ -96,10 +93,7 @@ impl Default for AppRules {
             map_remote: vec![],
             map_local: vec![],
             ssl: SslConfig::default(),
-            allowed_map_hosts: vec![
-                "localhost".to_string(),
-                "127.0.0.1".to_string(),
-            ],
+            allowed_map_hosts: vec!["localhost".to_string(), "127.0.0.1".to_string()],
         }
     }
 }

@@ -41,7 +41,8 @@ pub fn cert_info(cert_dir: &Path) -> CertInfo {
         exists,
         path: cert_path.display().to_string(),
         fingerprint,
-        installed_hint: "安装根证书后须重启代理；访问 IP 的 HTTPS 需使用本工具签发的站点证书。".into(),
+        installed_hint: "安装根证书后须重启代理；访问 IP 的 HTTPS 需使用本工具签发的站点证书。"
+            .into(),
     }
 }
 
@@ -225,10 +226,7 @@ pub fn install_ca(cert_path: &Path) -> Result<String, String> {
     if output.status.success() {
         Ok("证书已安装。请重启代理并重启浏览器。".into())
     } else {
-        Err(format!(
-            "自动安装失败。请手动安装：{}",
-            cert_path.display()
-        ))
+        Err(format!("自动安装失败。请手动安装：{}", cert_path.display()))
     }
 }
 

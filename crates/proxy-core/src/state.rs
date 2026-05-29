@@ -65,7 +65,9 @@ impl SharedState {
             }
             self.emit(SessionEvent::Created { session });
         } else {
-            self.emit(SessionEvent::Updated { session: session.clone() });
+            self.emit(SessionEvent::Updated {
+                session: session.clone(),
+            });
             if session.completed {
                 self.emit(SessionEvent::Completed { session });
             }

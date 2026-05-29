@@ -22,9 +22,7 @@ fn apply_macos_window_theme(window: &tauri::WebviewWindow) {
     let ns_window = unsafe { &*(ns_window_ptr as *mut NSWindow) };
     let bg = NSColor::colorWithRed_green_blue_alpha(30.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0, 1.0);
     ns_window.setBackgroundColor(Some(&bg));
-    if let Some(appearance) =
-        unsafe { NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua) }
-    {
+    if let Some(appearance) = unsafe { NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua) } {
         ns_window.setAppearance(Some(&appearance));
     }
 }
@@ -40,6 +38,8 @@ pub fn run_app(context: tauri::Context<tauri::Wry>) {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
@@ -101,10 +101,7 @@ pub fn run_app(context: tauri::Context<tauri::Wry>) {
         .build(context)
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if matches!(
-                event,
-                RunEvent::Exit | RunEvent::ExitRequested { .. }
-            ) {
+            if matches!(event, RunEvent::Exit | RunEvent::ExitRequested { .. }) {
                 shutdown::cleanup_on_exit(app_handle);
             }
         });

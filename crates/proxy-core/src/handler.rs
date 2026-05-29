@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use hudsucker::hyper::{Request, Response, StatusCode, Uri, header};
-use hudsucker::{Body, HttpContext, HttpHandler, RequestOrResponse};
 use http_body_util::BodyExt;
+use hudsucker::hyper::{header, Request, Response, StatusCode, Uri};
+use hudsucker::{Body, HttpContext, HttpHandler, RequestOrResponse};
 
 use crate::branding::CA_CERT_FILE;
 use crate::client_ua::client_label;
@@ -86,18 +86,30 @@ impl CaptureHandler {
         let decoded_body = decode_content_encoding(&parts.headers, raw_body.clone());
         let capture_body = capture_body_slice(&decoded_body);
         let out = Response::from_parts(parts.clone(), Body::from(raw_body));
-        Self::apply_response(state, session_id, &parts, &capture_body, wire_len, duration_ms)
-            .await;
+        Self::apply_response(
+            state,
+            session_id,
+            &parts,
+            &capture_body,
+            wire_len,
+            duration_ms,
+        )
+        .await;
         out
     }
 }
 
 impl HttpHandler for CaptureHandler {
-    async fn handle_request(
-        &mut self,
-        ctx: &HttpContext,
-        req: Request<Body>,
-    ) -> RequestOrResponse {
+    async fn should_intercept(&mut self, _ctx: &HttpContext, req: &Request<Body>) -> bool {
+        let host = req.uri().host().unwrap_or("").to_string();
+        if host.is_empty() {
+            return true;
+        }
+        let rules = self.state.rules.read().await;
+        should_mitm_ssl(&rules.ssl, &host)
+    }
+
+    async fn handle_request(&mut self, ctx: &HttpContext, req: Request<Body>) -> RequestOrResponse {
         // 检查是否是证书下载请求
         let path = req.uri().path();
         if path == "/proxyhero/ca.crt" || path == "/ca.crt" {
@@ -108,7 +120,7 @@ impl HttpHandler for CaptureHandler {
                     .header(header::CONTENT_TYPE, "application/x-x509-ca-cert")
                     .header(
                         header::CONTENT_DISPOSITION,
-                        "attachment; filename=\"proxyhero-ca.crt\""
+                        "attachment; filename=\"proxyhero-ca.crt\"",
                     )
                     .body(Body::from(content))
                     .unwrap();
@@ -127,8 +139,7 @@ impl HttpHandler for CaptureHandler {
 
         let method = parts.method.to_string();
         let uri = parts.uri.clone();
-        let (scheme, host, url, path_str) =
-            resolve_request_target(&method, &uri, &parts.headers);
+        let (scheme, host, url, path_str) = resolve_request_target(&method, &uri, &parts.headers);
 
         let rules = self.state.rules.read().await.clone();
         let ssl_tunnel = !should_mitm_ssl(&rules.ssl, &host);
@@ -235,11 +246,7 @@ impl HttpHandler for CaptureHandler {
         RequestOrResponse::Request(req)
     }
 
-    async fn handle_response(
-        &mut self,
-        _ctx: &HttpContext,
-        res: Response<Body>,
-    ) -> Response<Body> {
+    async fn handle_response(&mut self, _ctx: &HttpContext, res: Response<Body>) -> Response<Body> {
         let started = Instant::now();
         let session_id = match self.active_session_id.take() {
             Some(id) => id,
