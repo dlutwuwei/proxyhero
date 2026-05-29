@@ -97,6 +97,34 @@ export function RulesView() {
     });
   };
 
+  const enableAllRemote = () => {
+    save({
+      ...rules,
+      mapRemote: rules.mapRemote.map((r) => ({ ...r, enabled: true })),
+    });
+  };
+
+  const disableAllRemote = () => {
+    save({
+      ...rules,
+      mapRemote: rules.mapRemote.map((r) => ({ ...r, enabled: false })),
+    });
+  };
+
+  const enableAllLocal = () => {
+    save({
+      ...rules,
+      mapLocal: rules.mapLocal.map((r) => ({ ...r, enabled: true })),
+    });
+  };
+
+  const disableAllLocal = () => {
+    save({
+      ...rules,
+      mapLocal: rules.mapLocal.map((r) => ({ ...r, enabled: false })),
+    });
+  };
+
   const saveRemote = (rule: MapRemoteRule) => {
     const exists = rules.mapRemote.some((r) => r.id === rule.id);
     const mapRemote = exists
@@ -158,154 +186,212 @@ export function RulesView() {
 
       {tab === "remote" && (
         <>
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              className="rounded bg-[#333] px-3 py-1 text-sm hover:bg-[#444]"
-              onClick={() => setRemoteModal(newRemoteRule())}
-            >
-              {t("rules.add")}
-            </button>
-          </div>
+          {rules.mapRemote.length > 0 && (
+            <div className="mb-2 flex items-center justify-start gap-2">
+              <button
+                type="button"
+                className="rounded bg-[#333] px-3 py-1 text-xs hover:bg-[#444]"
+                onClick={enableAllRemote}
+              >
+                {t("common.enableAll")}
+              </button>
+              <button
+                type="button"
+                className="rounded bg-[#333] px-3 py-1 text-xs hover:bg-[#444]"
+                onClick={disableAllRemote}
+              >
+                {t("common.disableAll")}
+              </button>
+            </div>
+          )}
           {rules.mapRemote.length === 0 ? (
-            <p className="text-xs text-[#666]">{t("rules.emptyRemote")}</p>
+            <div className="flex flex-col items-center justify-center py-8">
+              <p className="text-xs text-[#666] mb-4">{t("rules.emptyRemote")}</p>
+              <button
+                type="button"
+                className="rounded bg-[#094771] px-4 py-2 text-sm font-medium hover:bg-[#0e5a8a] shadow-lg"
+                onClick={() => setRemoteModal(newRemoteRule())}
+              >
+                {t("rules.addRemote")}
+              </button>
+            </div>
           ) : (
-            <RulesTable columns={remoteColumns}>
-              {rules.mapRemote.map((r) => (
-                <tr
-                  key={r.id}
-                  className={`border-b border-[#333] hover:bg-[#2a2d2e] ${
-                    !r.enabled ? "opacity-50" : ""
-                  }`}
+            <>
+              <RulesTable columns={remoteColumns}>
+                {rules.mapRemote.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={`border-b border-[#333] hover:bg-[#2a2d2e] ${
+                      !r.enabled ? "opacity-50" : ""
+                    }`}
+                  >
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={r.enabled}
+                        onChange={(e) => toggleRemote(r.id, e.target.checked)}
+                        aria-label={`${t("common.enabled")} ${r.name}`}
+                      />
+                    </td>
+                    <td className="max-w-[120px] truncate px-3 py-2 text-[#ccc]">
+                      {r.name}
+                    </td>
+                    <td className="mono max-w-[200px] truncate px-3 py-2">
+                      {r.matchRule.protocol ? `${r.matchRule.protocol}://` : ""}
+                      {r.matchRule.host}
+                    </td>
+                    <td className="mono max-w-[100px] truncate px-3 py-2 text-[#888]">
+                      {r.matchRule.path || "/*"}
+                    </td>
+                    <td className="mono px-3 py-2 text-emerald-400/90">
+                      {formatMapTarget(
+                        r.mapTo.protocol,
+                        r.mapTo.host,
+                        r.mapTo.port,
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="text-[#9cdcfe] hover:underline"
+                          onClick={() => setRemoteModal({ ...r })}
+                        >
+                          {t("common.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-red-400 hover:underline"
+                          onClick={() =>
+                            save({
+                              ...rules,
+                              mapRemote: rules.mapRemote.filter(
+                                (x) => x.id !== r.id,
+                              ),
+                            })
+                          }
+                        >
+                          {t("common.delete")}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </RulesTable>
+              <div className="mt-3 flex justify-start">
+                <button
+                  type="button"
+                  className="rounded bg-[#094771] px-4 py-2 text-sm font-medium hover:bg-[#0e5a8a] shadow-lg"
+                  onClick={() => setRemoteModal(newRemoteRule())}
                 >
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={r.enabled}
-                      onChange={(e) => toggleRemote(r.id, e.target.checked)}
-                      aria-label={`${t("common.enabled")} ${r.name}`}
-                    />
-                  </td>
-                  <td className="max-w-[120px] truncate px-3 py-2 text-[#ccc]">
-                    {r.name}
-                  </td>
-                  <td className="mono max-w-[200px] truncate px-3 py-2">
-                    {r.matchRule.protocol ? `${r.matchRule.protocol}://` : ""}
-                    {r.matchRule.host}
-                  </td>
-                  <td className="mono max-w-[100px] truncate px-3 py-2 text-[#888]">
-                    {r.matchRule.path || "/*"}
-                  </td>
-                  <td className="mono px-3 py-2 text-emerald-400/90">
-                    {formatMapTarget(
-                      r.mapTo.protocol,
-                      r.mapTo.host,
-                      r.mapTo.port,
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="text-[#9cdcfe] hover:underline"
-                        onClick={() => setRemoteModal({ ...r })}
-                      >
-                        {t("common.edit")}
-                      </button>
-                      <button
-                        type="button"
-                        className="text-red-400 hover:underline"
-                        onClick={() =>
-                          save({
-                            ...rules,
-                            mapRemote: rules.mapRemote.filter(
-                              (x) => x.id !== r.id,
-                            ),
-                          })
-                        }
-                      >
-                        {t("common.delete")}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </RulesTable>
+                  {t("rules.addRemote")}
+                </button>
+              </div>
+            </>
           )}
         </>
       )}
 
       {tab === "local" && (
         <>
-          <div className="mb-2 flex justify-end">
-            <button
-              type="button"
-              className="rounded bg-[#333] px-3 py-1 text-sm hover:bg-[#444]"
-              onClick={() => setLocalModal(newLocalRule())}
-            >
-              {t("rules.add")}
-            </button>
-          </div>
+          {rules.mapLocal.length > 0 && (
+            <div className="mb-2 flex items-center justify-start gap-2">
+              <button
+                type="button"
+                className="rounded bg-[#333] px-3 py-1 text-xs hover:bg-[#444]"
+                onClick={enableAllLocal}
+              >
+                {t("common.enableAll")}
+              </button>
+              <button
+                type="button"
+                className="rounded bg-[#333] px-3 py-1 text-xs hover:bg-[#444]"
+                onClick={disableAllLocal}
+              >
+                {t("common.disableAll")}
+              </button>
+            </div>
+          )}
           {rules.mapLocal.length === 0 ? (
-            <p className="text-xs text-[#666]">{t("rules.emptyLocal")}</p>
+            <div className="flex flex-col items-center justify-center py-8">
+              <p className="text-xs text-[#666] mb-4">{t("rules.emptyLocal")}</p>
+              <button
+                type="button"
+                className="rounded bg-[#094771] px-4 py-2 text-sm font-medium hover:bg-[#0e5a8a] shadow-lg"
+                onClick={() => setLocalModal(newLocalRule())}
+              >
+                {t("rules.addLocal")}
+              </button>
+            </div>
           ) : (
-            <RulesTable columns={localColumns}>
-              {rules.mapLocal.map((r) => (
-                <tr
-                  key={r.id}
-                  className={`border-b border-[#333] hover:bg-[#2a2d2e] ${
-                    !r.enabled ? "opacity-50" : ""
-                  }`}
-                >
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={r.enabled}
-                      onChange={(e) => toggleLocal(r.id, e.target.checked)}
-                      aria-label={`${t("common.enabled")} ${r.name}`}
-                    />
-                  </td>
-                  <td className="max-w-[120px] truncate px-3 py-2">{r.name}</td>
-                  <td className="mono max-w-[180px] truncate px-3 py-2">
-                    {r.matchRule.host}
-                  </td>
-                  <td className="mono max-w-[100px] truncate px-3 py-2 text-[#888]">
-                    {r.matchRule.path || "/*"}
-                  </td>
-                  <td
-                    className="mono max-w-[200px] truncate px-3 py-2 text-[#888]"
-                    title={r.localFile}
+            <>
+              <RulesTable columns={localColumns}>
+                {rules.mapLocal.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={`border-b border-[#333] hover:bg-[#2a2d2e] ${
+                      !r.enabled ? "opacity-50" : ""
+                    }`}
                   >
-                    {r.localFile || "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="text-[#9cdcfe] hover:underline"
-                        onClick={() => setLocalModal({ ...r })}
-                      >
-                        {t("common.edit")}
-                      </button>
-                      <button
-                        type="button"
-                        className="text-red-400 hover:underline"
-                        onClick={() =>
-                          save({
-                            ...rules,
-                            mapLocal: rules.mapLocal.filter(
-                              (x) => x.id !== r.id,
-                            ),
-                          })
-                        }
-                      >
-                        {t("common.delete")}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </RulesTable>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={r.enabled}
+                        onChange={(e) => toggleLocal(r.id, e.target.checked)}
+                        aria-label={`${t("common.enabled")} ${r.name}`}
+                      />
+                    </td>
+                    <td className="max-w-[120px] truncate px-3 py-2">{r.name}</td>
+                    <td className="mono max-w-[180px] truncate px-3 py-2">
+                      {r.matchRule.host}
+                    </td>
+                    <td className="mono max-w-[100px] truncate px-3 py-2 text-[#888]">
+                      {r.matchRule.path || "/*"}
+                    </td>
+                    <td
+                      className="mono max-w-[200px] truncate px-3 py-2 text-[#888]"
+                      title={r.localFile}
+                    >
+                      {r.localFile || "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="text-[#9cdcfe] hover:underline"
+                          onClick={() => setLocalModal({ ...r })}
+                        >
+                          {t("common.edit")}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-red-400 hover:underline"
+                          onClick={() =>
+                            save({
+                              ...rules,
+                              mapLocal: rules.mapLocal.filter(
+                                (x) => x.id !== r.id,
+                              ),
+                            })
+                          }
+                        >
+                          {t("common.delete")}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </RulesTable>
+              <div className="mt-3 flex justify-start">
+                <button
+                  type="button"
+                  className="rounded bg-[#094771] px-4 py-2 text-sm font-medium hover:bg-[#0e5a8a] shadow-lg"
+                  onClick={() => setLocalModal(newLocalRule())}
+                >
+                  {t("rules.addLocal")}
+                </button>
+              </div>
+            </>
           )}
         </>
       )}
