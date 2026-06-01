@@ -48,6 +48,7 @@ export function TrafficToolbar() {
     { id: "all", label: t("common.all") },
     { id: "http", label: "HTTP" },
     { id: "https", label: "HTTPS" },
+    { id: "websocket", label: t("traffic.filter.websocket") },
   ];
 
   const statuses: { id: StatusFilter; label: string }[] = [

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ProtocolFilter = "all" | "http" | "https";
+export type ProtocolFilter = "all" | "http" | "https" | "websocket";
 export type StatusFilter =
   | "all"
   | "1xx"

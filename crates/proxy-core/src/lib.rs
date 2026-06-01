@@ -26,7 +26,7 @@ static TRACING: Once = Once::new();
 pub fn init_tracing() {
     TRACING.call_once(|| {
         let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "proxy_core=info,hudsucker=warn".into());
+            .unwrap_or_else(|_| "proxy_core=info,lk_debug_proxy=info,hudsucker=warn".into());
         tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_target(true)

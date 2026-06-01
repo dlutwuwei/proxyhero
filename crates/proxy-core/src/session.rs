@@ -58,7 +58,7 @@ pub struct Session {
     pub client_name: String,
     #[serde(default)]
     pub tls_preset: Option<String>,
-    #[serde(default)]
+    #[serde(default, rename = "isWebSocket")]
     pub is_websocket: bool,
     #[serde(default)]
     pub websocket_messages: Vec<WebSocketMessage>,
@@ -261,6 +261,33 @@ mod ws_tests {
         headers.insert("upgrade", "websocket".parse().unwrap());
         headers.insert("connection", "Upgrade".parse().unwrap());
         assert!(is_websocket_upgrade(&headers));
+    }
+
+    #[test]
+    fn ws_session_json_uses_camel_case() {
+        let mut session = Session::new(
+            "id".into(),
+            "GET".into(),
+            "wss://h.example/ws".into(),
+            "h.example".into(),
+            "/ws".into(),
+            "wss".into(),
+        );
+        session.is_websocket = true;
+        session.websocket_messages = vec![WebSocketMessage {
+            direction: "client".into(),
+            timestamp: chrono::Utc::now(),
+            opcode: "text".into(),
+            payload: "hello".into(),
+            payload_base64: None,
+            is_binary: false,
+            size: 5,
+            truncated: false,
+        }];
+        let json = serde_json::to_value(&session).unwrap();
+        assert_eq!(json.get("isWebSocket").and_then(|v| v.as_bool()), Some(true));
+        assert!(json.get("websocketMessages").and_then(|v| v.as_array()).is_some());
+        assert!(json.get("isWebsocket").is_none());
     }
 
     #[test]

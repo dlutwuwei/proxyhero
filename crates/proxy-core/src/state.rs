@@ -7,7 +7,7 @@ use tokio::sync::{broadcast, RwLock};
 
 use crate::rules::AppRules;
 use crate::session::{Session, SessionEvent};
-use crate::websocket::{paths_match, ws_context_target, ws_host_key, ws_key_candidates, ws_keys_from_context};
+use crate::websocket::{paths_match, ws_context_target, ws_host_key, ws_key_candidates, ws_keys_from_context, ws_message_preview};
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -23,7 +23,7 @@ pub struct SharedState {
 
 impl SharedState {
     pub fn new(max_sessions: usize, cert_dir: PathBuf) -> Self {
-        let (event_tx, _) = broadcast::channel(4096);
+        let (event_tx, _) = broadcast::channel(65536);
         Self {
             rules: Arc::new(RwLock::new(AppRules::default())),
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -66,8 +66,28 @@ impl SharedState {
                     self.sessions.write().await.remove(&old_id);
                 }
             }
+            if session.is_websocket {
+                tracing::info!(
+                    session_id = %id,
+                    url = %session.url,
+                    msg_count = session.websocket_messages.len(),
+                    "WebSocket session created"
+                );
+            }
             self.emit(SessionEvent::Created { session });
         } else {
+            if session.is_websocket && !session.websocket_messages.is_empty() {
+                let last = session.websocket_messages.last().unwrap();
+                tracing::info!(
+                    session_id = %id,
+                    msg_count = session.websocket_messages.len(),
+                    completed = session.completed,
+                    last_opcode = %last.opcode,
+                    last_size = last.size,
+                    preview = %ws_message_preview(last, 160),
+                    "WebSocket session persisted"
+                );
+            }
             self.emit(SessionEvent::Updated {
                 session: session.clone(),
             });

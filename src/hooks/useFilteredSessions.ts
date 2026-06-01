@@ -31,16 +31,20 @@ function shouldShowConnectSession(
 
 function matchesProtocol(s: Session, filter: ProtocolFilter): boolean {
   if (filter === "all") return true;
+  if (filter === "websocket") return s.isWebSocket === true;
   if (filter === "https") {
+    if (s.isWebSocket) return false;
     if (isConnect(s)) return s.sslTunnel;
-    return s.isHttps || s.scheme === "wss";
+    return s.isHttps;
   }
   if (isConnect(s)) return false;
-  return !s.isHttps && (s.scheme === "http" || s.scheme === "ws");
+  if (s.isWebSocket) return false;
+  return !s.isHttps && s.scheme === "http";
 }
 
 function matchesStatus(s: Session, filter: StatusFilter): boolean {
   if (filter === "all") return true;
+  if (s.isWebSocket && (filter === "active" || filter === "1xx")) return true;
   if (filter === "active") return !s.completed || s.isWebSocket === true;
   const status = s.status;
   if (status == null) return s.isWebSocket === true;

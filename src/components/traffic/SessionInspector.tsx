@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { api } from "../../api/tauri";
 import { useT } from "../../hooks/useT";
 import { useAppStore } from "../../stores/appStore";
@@ -38,6 +38,7 @@ function StatusPill({ session }: { session: Session }) {
 export function SessionInspector({ session }: { session: Session | undefined }) {
   const t = useT();
   const setMessage = useAppStore((s) => s.setMessage);
+  const upsertSession = useAppStore((s) => s.upsertSession);
   const [splitPct, setSplitPct] = useState(50);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +59,28 @@ export function SessionInspector({ session }: { session: Session | undefined }) 
     dragging.current = false;
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   }, []);
+
+  useEffect(() => {
+    if (!session?.isWebSocket) return;
+    let cancelled = false;
+    void api.getSession(session.id).then((fresh) => {
+      if (!cancelled && fresh) upsertSession(fresh);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id, session?.isWebSocket, upsertSession]);
+
+  useEffect(() => {
+    if (!session?.isWebSocket || session.completed) return;
+    const id = session.id;
+    const timer = setInterval(() => {
+      void api.getSession(id).then((fresh) => {
+        if (fresh) upsertSession(fresh);
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [session?.id, session?.isWebSocket, session?.completed, upsertSession]);
 
   if (!session) {
     return (

@@ -144,13 +144,52 @@ pub fn ws_direction(ctx: &WebSocketContext) -> &'static str {
     }
 }
 
+pub fn ws_message_preview(msg: &WebSocketMessage, max: usize) -> String {
+    if msg.is_binary {
+        if let Some(b64) = &msg.payload_base64 {
+            return format!("[binary b64={} raw_size={}]", b64.len(), msg.size);
+        }
+        return format!("[binary size={}]", msg.size);
+    }
+    if !msg.payload.is_empty() {
+        let preview: String = msg.payload.chars().take(max).collect();
+        if msg.payload.len() > max {
+            return format!("{preview}…");
+        }
+        return preview;
+    }
+    if msg.opcode == "close" {
+        return "(close)".into();
+    }
+    format!("({} empty payload, size={})", msg.opcode, msg.size)
+}
+
+pub fn message_kind(msg: &Message) -> &'static str {
+    match msg {
+        Message::Text(_) => "Text",
+        Message::Binary(_) => "Binary",
+        Message::Ping(_) => "Ping",
+        Message::Pong(_) => "Pong",
+        Message::Close(_) => "Close",
+        Message::Frame(_) => "Frame",
+    }
+}
+
 pub fn ws_message_from_frame(ctx: &WebSocketContext, msg: &Message) -> (WebSocketMessage, bool) {
     let (opcode, full_payload) = match msg {
         Message::Text(text) => ("text", text.as_bytes().to_vec()),
         Message::Binary(data) => ("binary", data.to_vec()),
         Message::Ping(data) => ("ping", data.to_vec()),
         Message::Pong(data) => ("pong", data.to_vec()),
-        Message::Frame(_) => ("frame", vec![]),
+        Message::Frame(frame) => {
+            let payload = frame.payload().to_vec();
+            tracing::warn!(
+                opcode = ?frame.header().opcode,
+                payload_len = payload.len(),
+                "WebSocket raw Frame variant (payload may be unprocessed)"
+            );
+            ("frame", payload)
+        }
         Message::Close(frame) => {
             let payload = frame
                 .as_ref()

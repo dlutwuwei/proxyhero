@@ -25,6 +25,7 @@ use crate::state::SharedState;
 use crate::tls_fingerprint::{preset_name, specter_client};
 use crate::websocket::{
     trim_ws_messages, ws_context_target, ws_keys_from_context, ws_message_from_frame,
+    ws_message_preview, message_kind,
 };
 
 /// 每个 HTTP 事务使用独立的 handler 克隆（hudsucker `self.clone().proxy(req)`），
@@ -551,21 +552,30 @@ impl WebSocketHandler for CaptureHandler {
         };
 
         let (ws_msg, is_close) = ws_message_from_frame(ctx, &message);
-        tracing::debug!(
+        tracing::info!(
             session_id = %session_id,
+            raw_kind = message_kind(&message),
             direction = %ws_msg.direction,
             opcode = %ws_msg.opcode,
             size = ws_msg.size,
+            payload_len = ws_msg.payload.len(),
+            has_base64 = ws_msg.payload_base64.is_some(),
             is_close,
+            preview = %ws_message_preview(&ws_msg, 160),
             "WebSocket frame captured"
         );
         {
             let mut sessions = self.state.sessions.write().await;
             let Some(session) = sessions.get_mut(&session_id) else {
+                tracing::warn!(
+                    session_id = %session_id,
+                    "WebSocket frame: session id resolved but missing from store"
+                );
                 return Some(message);
             };
             session.websocket_messages.push(ws_msg);
             trim_ws_messages(&mut session.websocket_messages);
+            let msg_count = session.websocket_messages.len();
             if is_close {
                 session.completed = true;
                 session.duration_ms = Some(
@@ -576,6 +586,12 @@ impl WebSocketHandler for CaptureHandler {
             }
             let updated = session.clone();
             drop(sessions);
+            tracing::debug!(
+                session_id = %session_id,
+                msg_count,
+                completed = updated.completed,
+                "WebSocket session store updated, emitting to UI"
+            );
             self.state.register_ws_session_aliases(&updated).await;
             if is_close {
                 self.state.unregister_ws_session(&session_id).await;

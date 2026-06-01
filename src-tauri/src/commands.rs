@@ -88,7 +88,18 @@ pub async fn get_session(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<Option<Session>, String> {
-    Ok(state.shared.sessions.read().await.get(&session_id).cloned())
+    let session = state.shared.sessions.read().await.get(&session_id).cloned();
+    if let Some(ref s) = session {
+        if s.is_websocket {
+            tracing::info!(
+                session_id = %session_id,
+                msg_count = s.websocket_messages.len(),
+                completed = s.completed,
+                "get_session WebSocket pull"
+            );
+        }
+    }
+    Ok(session)
 }
 
 #[tauri::command]
@@ -253,6 +264,23 @@ pub fn spawn_session_listener(app: AppHandle, state: Arc<SharedState>) {
         loop {
             match rx.recv().await {
                 Ok(event) => {
+                    let (event_type, session) = match &event {
+                        SessionEvent::Created { session } => ("created", session),
+                        SessionEvent::Updated { session } => ("updated", session),
+                        SessionEvent::Completed { session } => ("completed", session),
+                    };
+                    if session.is_websocket {
+                        let last = session.websocket_messages.last();
+                        tracing::info!(
+                            event = event_type,
+                            session_id = %session.id,
+                            msg_count = session.websocket_messages.len(),
+                            completed = session.completed,
+                            last_opcode = last.map(|m| m.opcode.as_str()).unwrap_or("-"),
+                            last_payload_len = last.map(|m| m.payload.len()).unwrap_or(0),
+                            "emit WebSocket session to UI"
+                        );
+                    }
                     let payload = match &event {
                         SessionEvent::Created { session } => {
                             serde_json::json!({ "type": "created", "session": session })
@@ -264,9 +292,14 @@ pub fn spawn_session_listener(app: AppHandle, state: Arc<SharedState>) {
                             serde_json::json!({ "type": "completed", "session": session })
                         }
                     };
-                    let _ = app.emit("session:event", payload);
+                    if let Err(e) = app.emit("session:event", payload) {
+                        tracing::warn!(error = %e, "failed to emit session:event");
+                    }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(skipped = n, "session event broadcast lagged, request UI resync");
+                    let _ = app.emit("session:resync", ());
+                }
                 Err(_) => break,
             }
         }
