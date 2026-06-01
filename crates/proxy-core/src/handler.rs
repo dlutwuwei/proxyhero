@@ -2,19 +2,20 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use http_body_util::BodyExt;
-use hudsucker::hyper::{header, Request, Response, StatusCode, Uri};
+use hudsucker::hyper::{header, Request, Response, StatusCode};
 use hudsucker::{Body, HttpContext, HttpHandler, RequestOrResponse};
 
 use crate::branding::CA_CERT_FILE;
 use crate::client_ua::client_label;
 use crate::matcher::{find_map_local, find_map_remote, should_mitm_ssl};
-use crate::request_target::resolve_request_target;
-use crate::rules::is_map_target_allowed;
+use crate::request_target::{mitm_https_target, resolve_request_target};
+use crate::rules::{is_map_target_allowed, TlsPreset};
 use crate::session::{
     body_from_bytes, capture_body_slice, decode_content_encoding, headers_from_http,
     user_agent_from_headers, Session,
 };
 use crate::state::SharedState;
+use crate::tls_fingerprint::{preset_name, specter_client};
 
 /// 每个 HTTP 事务使用独立的 handler 克隆（hudsucker `self.clone().proxy(req)`），
 /// `active_session_id` 仅在本克隆的生命周期内有效，避免连接级 FIFO 在 HTTP/2 并发下错配。
@@ -37,6 +38,76 @@ impl CaptureHandler {
         Self {
             state,
             active_session_id: None,
+        }
+    }
+
+    async fn forward_with_specter(
+        &self,
+        session_id: &str,
+        method: &str,
+        url: &str,
+        headers: &http::HeaderMap,
+        body: &[u8],
+        preset: &TlsPreset,
+        started: Instant,
+    ) -> Response<Body> {
+        let client = specter_client(preset);
+
+        let http_method = http::Method::from_bytes(method.as_bytes()).unwrap_or(http::Method::GET);
+        let mut req = match http_method {
+            http::Method::GET => client.get(url),
+            http::Method::POST => client.post(url),
+            http::Method::PUT => client.put(url),
+            http::Method::DELETE => client.delete(url),
+            http::Method::PATCH => client.patch(url),
+            http::Method::HEAD => client.head(url),
+            _ => client.request(http_method, url),
+        };
+
+        for (name, value) in headers.iter() {
+            let skip = matches!(
+                name.as_str(),
+                "host" | "connection" | "proxy-connection" | "transfer-encoding" | "content-length"
+            );
+            if skip {
+                continue;
+            }
+            if let Ok(v) = value.to_str() {
+                req = req.header(name.as_str(), v);
+            }
+        }
+
+        if !body.is_empty() {
+            req = req.body(body.to_vec());
+        }
+
+        match req.send().await {
+            Ok(specter_res) => {
+                let status = specter_res.status_code();
+                let mut builder = Response::builder().status(status);
+                for (k, v) in specter_res.headers().iter() {
+                    builder = builder.header(k, v);
+                }
+                let res_body = specter_res.bytes().unwrap_or_default();
+                let res = builder.body(Body::from(res_body.to_vec())).unwrap();
+                Self::capture_response_body(
+                    &self.state,
+                    session_id,
+                    res,
+                    started.elapsed().as_millis() as u64,
+                )
+                .await
+            }
+            Err(e) => {
+                tracing::warn!("specter forward failed for {url}: {e}");
+                let err_body = format!(r#"{{"error":"tls fingerprint forward failed: {e}"}}"#);
+                let res = Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
+                    .header("content-type", "application/json")
+                    .body(Body::from(err_body))
+                    .unwrap();
+                Self::capture_response_body(&self.state, session_id, res, 0).await
+            }
         }
     }
 
@@ -139,10 +210,16 @@ impl HttpHandler for CaptureHandler {
 
         let method = parts.method.to_string();
         let uri = parts.uri.clone();
-        let (scheme, host, url, path_str) = resolve_request_target(&method, &uri, &parts.headers);
+        let (mut scheme, host, mut url, path_str) =
+            resolve_request_target(&method, &uri, &parts.headers);
 
         let rules = self.state.rules.read().await.clone();
         let ssl_tunnel = !should_mitm_ssl(&rules.ssl, &host);
+
+        if let Some((s, u)) = mitm_https_target(&scheme, &host, &uri, &parts.headers, ssl_tunnel) {
+            scheme = s;
+            url = u;
+        }
 
         let session_id = uuid::Uuid::new_v4().to_string();
         self.active_session_id = Some(session_id.clone());
@@ -214,8 +291,8 @@ impl HttpHandler for CaptureHandler {
             return RequestOrResponse::Response(res);
         }
 
-        let mut req = Request::from_parts(parts, body);
-
+        // Map Remote 改写（在 TLS 指纹转发前也要生效）
+        let mut upstream_url = url.clone();
         if let Some(remote_rule) = find_map_remote(&rules.map_remote, &scheme, &host, &path_str) {
             if is_map_target_allowed(&remote_rule.map_to.host, &rules.allowed_map_hosts) {
                 session.mapped_rule_id = Some(remote_rule.id.clone());
@@ -231,16 +308,38 @@ impl HttpHandler for CaptureHandler {
                 } else {
                     "/".to_string()
                 };
-                let new_uri = format!(
+                upstream_url = format!(
                     "{}://{}:{}{}",
                     map.protocol, map.host, map.port, path_and_query
                 );
-                if let Ok(parsed) = new_uri.parse::<Uri>() {
-                    *req.uri_mut() = parsed;
-                    session.url = req.uri().to_string();
-                }
+                session.url = upstream_url.clone();
             }
         }
+
+        // TLS 指纹模式：用 specter 客户端直接向上游发请求
+        let tls_preset = rules.tls_fingerprint.resolved_preset(user_agent.as_deref());
+        if let Some(ref preset) = tls_preset {
+            if upstream_url.starts_with("https://") && !ssl_tunnel {
+                session.tls_preset = Some(preset_name(preset).to_string());
+                self.state.upsert_session(session).await;
+
+                let res = self
+                    .forward_with_specter(
+                        &session_id,
+                        &method,
+                        &upstream_url,
+                        &parts.headers,
+                        &capture_body,
+                        preset,
+                        started,
+                    )
+                    .await;
+                self.active_session_id = None;
+                return RequestOrResponse::Response(res);
+            }
+        }
+
+        let req = Request::from_parts(parts, body);
 
         self.state.upsert_session(session).await;
         RequestOrResponse::Request(req)

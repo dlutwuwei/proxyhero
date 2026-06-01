@@ -9,6 +9,7 @@ pub mod rules;
 pub mod server;
 pub mod session;
 pub mod state;
+pub mod tls_fingerprint;
 
 pub use branding::*;
 pub use curl::format_session_curl;

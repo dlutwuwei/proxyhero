@@ -85,6 +85,12 @@ export function RequestPane({ session }: { session: Session }) {
                     ? `${bodyText(session.request).length} chars`
                     : "—"}
                 </dd>
+                {session.tlsPreset && (
+                  <>
+                    <dt className="text-[#888]">{t("traffic.inspector.tlsPreset")}</dt>
+                    <dd className="mono">{session.tlsPreset}</dd>
+                  </>
+                )}
               </dl>
             );
           default:

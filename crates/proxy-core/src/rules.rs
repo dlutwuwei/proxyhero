@@ -8,6 +8,65 @@ pub struct AppRules {
     pub ssl: SslConfig,
     #[serde(default)]
     pub allowed_map_hosts: Vec<String>,
+    #[serde(default)]
+    pub tls_fingerprint: TlsFingerprintConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TlsFingerprintMode {
+    Default,
+    Auto,
+    Preset,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TlsPreset {
+    Chrome,
+    Firefox,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TlsFingerprintConfig {
+    pub mode: TlsFingerprintMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preset: Option<TlsPreset>,
+}
+
+impl Default for TlsFingerprintConfig {
+    fn default() -> Self {
+        Self {
+            mode: TlsFingerprintMode::Default,
+            preset: None,
+        }
+    }
+}
+
+impl TlsFingerprintConfig {
+    pub fn is_enabled(&self) -> bool {
+        self.mode != TlsFingerprintMode::Default
+    }
+
+    pub fn resolved_preset(&self, user_agent: Option<&str>) -> Option<TlsPreset> {
+        match &self.mode {
+            TlsFingerprintMode::Default => None,
+            TlsFingerprintMode::Preset => self.preset.clone(),
+            TlsFingerprintMode::Auto => {
+                if let Some(ua) = user_agent {
+                    let lower = ua.to_ascii_lowercase();
+                    if lower.contains("chrome/") || lower.contains("edg/") {
+                        return Some(TlsPreset::Chrome);
+                    }
+                    if lower.contains("firefox/") {
+                        return Some(TlsPreset::Firefox);
+                    }
+                }
+                Some(TlsPreset::Chrome)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +153,7 @@ impl Default for AppRules {
             map_local: vec![],
             ssl: SslConfig::default(),
             allowed_map_hosts: vec!["localhost".to_string(), "127.0.0.1".to_string()],
+            tls_fingerprint: TlsFingerprintConfig::default(),
         }
     }
 }

@@ -40,6 +40,8 @@ pub struct Session {
     pub client_addr: Option<String>,
     pub user_agent: Option<String>,
     pub client_name: String,
+    #[serde(default)]
+    pub tls_preset: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +85,7 @@ impl Session {
             client_addr: None,
             user_agent: None,
             client_name: "无标识".into(),
+            tls_preset: None,
         }
     }
 }

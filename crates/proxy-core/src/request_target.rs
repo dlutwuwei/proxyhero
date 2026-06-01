@@ -93,6 +93,28 @@ pub fn resolve_request_target(
     (scheme, host, url, path_only)
 }
 
+/// MITM 解密后的 HTTPS 请求 URI 无 scheme，会被解析成 http；此处还原为 https 上游地址。
+pub fn mitm_https_target(
+    scheme: &str,
+    host: &str,
+    uri: &Uri,
+    headers: &HeaderMap,
+    ssl_tunnel: bool,
+) -> Option<(String, String)> {
+    if ssl_tunnel || scheme == "https" || uri.scheme().is_some() {
+        return None;
+    }
+    if port_from_host_header(headers) == Some(80) {
+        return None;
+    }
+    let path = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    let url = match port_from_host_header(headers) {
+        Some(p) if p != 443 => format!("https://{host}:{p}{path}"),
+        _ => format!("https://{host}{path}"),
+    };
+    Some(("https".to_string(), url))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,5 +171,18 @@ mod tests {
         assert_eq!(host, "example.com");
         assert_eq!(url, "http://example.com/api?q=1");
         assert_eq!(path, "/api");
+    }
+
+    #[test]
+    fn mitm_inner_https_request() {
+        let uri: Uri = "/api?q=1".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, "example.com".parse().unwrap());
+        let (scheme, host, _, _) = resolve_request_target("GET", &uri, &headers);
+        assert_eq!(scheme, "http");
+        assert_eq!(host, "example.com");
+        let fixed = mitm_https_target(&scheme, &host, &uri, &headers, false).unwrap();
+        assert_eq!(fixed.0, "https");
+        assert_eq!(fixed.1, "https://example.com/api?q=1");
     }
 }

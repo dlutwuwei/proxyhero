@@ -7,13 +7,16 @@ import { useAppStore } from "../stores/appStore";
 import { useLocaleStore } from "../stores/localeStore";
 import { useTrafficStore } from "../stores/trafficStore";
 import type { Locale } from "../i18n/messages";
+import type { TlsFingerprintMode, TlsPreset } from "../types";
 
 const CURRENT_VERSION = "0.1.0";
 
 export function SettingsView() {
   const t = useT();
   const config = useAppStore((s) => s.config);
+  const rules = useAppStore((s) => s.rules);
   const loadConfig = useAppStore((s) => s.loadConfig);
+  const loadRules = useAppStore((s) => s.loadRules);
   const refreshStatus = useAppStore((s) => s.refreshStatus);
   const setMessage = useAppStore((s) => s.setMessage);
   const locale = useLocaleStore((s) => s.locale);
@@ -35,7 +38,26 @@ export function SettingsView() {
     api.getDeviceProxyHint().then(setHint);
   }, [config]);
 
-  if (!config) return null;
+  if (!config || !rules) return null;
+
+  const tls = rules.tlsFingerprint ?? { mode: "default" as TlsFingerprintMode };
+
+  const saveTlsFingerprint = async (
+    mode: TlsFingerprintMode,
+    preset?: TlsPreset,
+  ) => {
+    const next = {
+      ...rules,
+      tlsFingerprint: {
+        mode,
+        preset: mode === "preset" ? preset ?? "chrome" : undefined,
+      },
+    };
+    await api.saveRules(next);
+    await loadRules();
+    setMessage(t("settings.tlsFingerprint.saved"));
+    setTimeout(() => setMessage(null), 2500);
+  };
 
   const savePort = async () => {
     const next = { ...config, proxyPort: port };
@@ -93,6 +115,48 @@ export function SettingsView() {
         </p>
         <p className="mb-3 text-xs text-amber-200/90">{t("settings.proxyIpHint")}</p>
         <ProxyToggleButton size="md" />
+      </section>
+
+      <section className="mb-6 max-w-lg rounded border border-[#333] bg-[#252526] p-4">
+        <h3 className="mb-1 text-sm font-medium">{t("settings.tlsFingerprint")}</h3>
+        <p className="mb-3 text-xs text-[#888]">{t("settings.tlsFingerprintDesc")}</p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {(
+            [
+              ["default", "settings.tlsFingerprint.mode.default"],
+              ["auto", "settings.tlsFingerprint.mode.auto"],
+              ["preset", "settings.tlsFingerprint.mode.preset"],
+            ] as const
+          ).map(([mode, labelKey]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => saveTlsFingerprint(mode, tls.preset)}
+              className={`rounded px-3 py-1.5 text-sm ${
+                tls.mode === mode ? "bg-[#094771]" : "bg-[#333]"
+              }`}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+        {tls.mode === "preset" && (
+          <div>
+            <label className="mb-1 block text-xs text-[#888]">
+              {t("settings.tlsFingerprint.preset")}
+            </label>
+            <select
+              className="rounded border border-[#444] bg-[#1e1e1e] px-2 py-1.5 text-sm"
+              value={tls.preset ?? "chrome"}
+              onChange={(e) =>
+                saveTlsFingerprint("preset", e.target.value as TlsPreset)
+              }
+            >
+              <option value="chrome">{t("settings.tlsFingerprint.preset.chrome")}</option>
+              <option value="firefox">{t("settings.tlsFingerprint.preset.firefox")}</option>
+            </select>
+          </div>
+        )}
       </section>
 
       <section className="mb-6 max-w-lg rounded border border-[#333] bg-[#252526] p-4">

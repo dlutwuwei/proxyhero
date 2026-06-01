@@ -30,6 +30,7 @@ export interface Session {
   clientAddr?: string;
   userAgent?: string;
   clientName?: string;
+  tlsPreset?: string;
 }
 
 export interface MapRemoteRule {
@@ -74,11 +75,20 @@ export interface SslConfig {
   excludeHosts: string[];
 }
 
+export type TlsFingerprintMode = "default" | "auto" | "preset";
+export type TlsPreset = "chrome" | "firefox";
+
+export interface TlsFingerprintConfig {
+  mode: TlsFingerprintMode;
+  preset?: TlsPreset;
+}
+
 export interface AppRules {
   mapRemote: MapRemoteRule[];
   mapLocal: MapLocalRule[];
   ssl: SslConfig;
   allowedMapHosts: string[];
+  tlsFingerprint?: TlsFingerprintConfig;
 }
 
 export interface AppConfig {
