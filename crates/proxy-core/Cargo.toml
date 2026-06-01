@@ -18,7 +18,9 @@ http-body-util = "0.1"
 bytes = "1"
 futures = "0.3"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 http = "1"
+hyper-tungstenite = "0.19"
 pin-project-lite = "0.2"
 moka = { version = "0.12", features = ["future"] }
 rand = "0.9"
@@ -29,4 +31,12 @@ specter = { package = "specters", version = "4" }
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+futures = "0.3"
+async-http-proxy = { version = "1.2", features = ["runtime-tokio"] }
+hyper-tungstenite = "0.19"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+hudsucker = { version = "0.24", default-features = false, features = ["decoder", "http2", "rcgen-ca", "rustls-client"] }
+time = "0.3"

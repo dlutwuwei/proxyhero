@@ -7,6 +7,17 @@ export interface HttpMessage {
   truncated?: boolean;
 }
 
+export interface WebSocketMessage {
+  direction: "client" | "server";
+  timestamp: string;
+  opcode: string;
+  payload: string;
+  payloadBase64?: string;
+  isBinary: boolean;
+  size: number;
+  truncated?: boolean;
+}
+
 export interface Session {
   id: string;
   startedAt: string;
@@ -31,6 +42,8 @@ export interface Session {
   userAgent?: string;
   clientName?: string;
   tlsPreset?: string;
+  isWebSocket?: boolean;
+  websocketMessages?: WebSocketMessage[];
 }
 
 export interface MapRemoteRule {
