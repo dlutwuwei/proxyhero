@@ -49,7 +49,7 @@ export function SessionRow({
         {client}
       </span>
       <span className="mono w-16 shrink-0 font-medium text-[#569cd6]">
-        {session.method}
+        {session.isWebSocket ? "WS" : session.method}
       </span>
       <span className={`flex w-20 shrink-0 items-center gap-1 ${statusColor(session.status)}`}>
         {!session.completed ? (
@@ -64,6 +64,11 @@ export function SessionRow({
       {session.mapType && (
         <span className="shrink-0 rounded bg-violet-900/50 px-1 text-[10px] text-violet-300">
           {session.mapType}
+        </span>
+      )}
+      {session.isWebSocket && (
+        <span className="shrink-0 rounded bg-sky-900/50 px-1 text-[10px] text-sky-300">
+          WS
         </span>
       )}
       <span

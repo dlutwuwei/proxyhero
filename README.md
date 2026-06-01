@@ -117,9 +117,24 @@ Persistent directory (app data):
 
 - [Architecture & Capture (English)](docs/architecture-and-capture.md)
 
+## Capture Support
+
+| Type | Supported | Notes |
+|------|-----------|-------|
+| **HTTP** | ✅ | Plaintext request/response, headers, body |
+| **HTTPS (MITM)** | ✅ | Requires trusted **ProxyHero CA** and domain matched by SSL Include / not excluded |
+| **CONNECT tunnel** | ⚠️ | CONNECT session always logged; **SSL Exclude** or non-MITM hosts show metadata only (host, 200), no decrypted tunnel traffic |
+| **WebSocket (`ws://`)** | ✅ | HTTP/1.1 `Upgrade` handshake + message frames |
+| **WebSocket (`wss://`)** | ✅ | Same as above; requires MITM TLS decryption; MITM leg uses ALPN `http/1.1` |
+| **HTTP/2 (regular HTTP)** | ✅ | Upstream may use HTTP/2; multiplexed streams paired via FIFO on same connection |
+| **HTTP/2 WebSocket** | ❌ | RFC 8441 not supported (`:method=CONNECT` + `:protocol=websocket`) |
+| **Certificate Pinning** | ❌ | Cannot MITM clients that verify certificate pins |
+| **Non-proxied traffic** | ❌ | Only traffic routed through system/app proxy is captured |
+
 ## Limitations
 
 - Must trust **ProxyHero CA** to decrypt HTTPS; Certificate Pinning clients cannot be MITM'd.
+- **WSS** on SSL Exclude or non-MITM hosts shows CONNECT only; WebSocket messages are not captured.
 - Only captures traffic forwarded through proxy; devServer server-side forwarding does not pass through browser proxy.
 - HTTP/2 multiplexing associates requests/responses via FIFO on same connection; may mismatch under very high concurrency.
 - This tool is for local debugging only, does not replace business gateway or backend authentication capabilities.

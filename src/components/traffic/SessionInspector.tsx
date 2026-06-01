@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { api } from "../../api/tauri";
 import { useT } from "../../hooks/useT";
 import { useAppStore } from "../../stores/appStore";
@@ -7,13 +7,16 @@ import type { Session } from "../../types";
 import { statusLabel } from "./httpInspectorUtils";
 import { RequestPane } from "./inspector/RequestPane";
 import { ResponsePane } from "./inspector/ResponsePane";
+import { WebSocketPane } from "./inspector/WebSocketPane";
 
 function StatusPill({ session }: { session: Session }) {
   const t = useT();
   if (!session.completed) {
     return (
       <span className="rounded bg-amber-700/80 px-2 py-0.5 text-xs font-medium text-white">
-        {t("traffic.inspector.active")}
+        {session.isWebSocket
+          ? t("traffic.inspector.wsActive")
+          : t("traffic.inspector.active")}
       </span>
     );
   }
@@ -35,6 +38,7 @@ function StatusPill({ session }: { session: Session }) {
 export function SessionInspector({ session }: { session: Session | undefined }) {
   const t = useT();
   const setMessage = useAppStore((s) => s.setMessage);
+  const upsertSession = useAppStore((s) => s.upsertSession);
   const [splitPct, setSplitPct] = useState(50);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +60,28 @@ export function SessionInspector({ session }: { session: Session | undefined }) 
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   }, []);
 
+  useEffect(() => {
+    if (!session?.isWebSocket) return;
+    let cancelled = false;
+    void api.getSession(session.id).then((fresh) => {
+      if (!cancelled && fresh) upsertSession(fresh);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id, session?.isWebSocket, upsertSession]);
+
+  useEffect(() => {
+    if (!session?.isWebSocket || session.completed) return;
+    const id = session.id;
+    const timer = setInterval(() => {
+      void api.getSession(id).then((fresh) => {
+        if (fresh) upsertSession(fresh);
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [session?.id, session?.isWebSocket, session?.completed, upsertSession]);
+
   if (!session) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[#666]">
@@ -75,23 +101,27 @@ export function SessionInspector({ session }: { session: Session | undefined }) 
     }
   };
 
+  const isWebSocket = session.isWebSocket;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#252526]">
       <div className="flex shrink-0 items-center gap-2 border-b border-[#333] px-3 py-2">
         <span className="rounded bg-emerald-700/80 px-2 py-0.5 text-xs font-medium text-white">
-          {session.method}
+          {isWebSocket ? "WS" : session.method}
         </span>
         <StatusPill session={session} />
         <div className="mono min-w-0 flex-1 truncate text-xs text-emerald-400">
           {session.url}
         </div>
-        <button
-          type="button"
-          onClick={() => copyCurl()}
-          className="shrink-0 rounded bg-[#333] px-2 py-1 text-xs text-[#ccc] hover:bg-[#444]"
-        >
-          {t("traffic.inspector.copyCurl")}
-        </button>
+        {!isWebSocket && (
+          <button
+            type="button"
+            onClick={() => copyCurl()}
+            className="shrink-0 rounded bg-[#333] px-2 py-1 text-xs text-[#ccc] hover:bg-[#444]"
+          >
+            {t("traffic.inspector.copyCurl")}
+          </button>
+        )}
       </div>
       {session.mappedRuleName && (
         <div className="shrink-0 border-b border-[#333] px-3 py-1 text-xs text-violet-300">
@@ -101,20 +131,34 @@ export function SessionInspector({ session }: { session: Session | undefined }) 
       <div ref={containerRef} className="flex min-h-0 flex-1">
         <div
           className="flex min-h-0 min-w-0 flex-col border-r border-[#333]"
-          style={{ width: `${splitPct}%` }}
+          style={{ width: isWebSocket ? "35%" : `${splitPct}%` }}
         >
           <RequestPane session={session} />
         </div>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          className="w-1 shrink-0 cursor-col-resize bg-[#2d2d2d] hover:bg-[#3794ff]/40"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-        />
+        {!isWebSocket && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            className="w-1 shrink-0 cursor-col-resize bg-[#2d2d2d] hover:bg-[#3794ff]/40"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+          />
+        )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <ResponsePane session={session} />
+          {isWebSocket ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="shrink-0 border-b border-[#333] px-3 py-2 text-xs font-medium text-[#ccc]">
+                {t("traffic.inspector.wsMessages")} (
+                {session.websocketMessages?.length ?? 0})
+              </div>
+              <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+                <WebSocketPane messages={session.websocketMessages ?? []} />
+              </div>
+            </div>
+          ) : (
+            <ResponsePane session={session} />
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, onSessionEvent } from "../api/tauri";
+import { api, onSessionEvent, onSessionResync } from "../api/tauri";
 import { useTrafficStore } from "./trafficStore";
 import type {
   AppConfig,
@@ -9,6 +9,26 @@ import type {
   ProxyStatus,
   Session,
 } from "../types";
+
+function normalizeSession(raw: Session & Record<string, unknown>): Session {
+  const s = { ...raw };
+  if (s.isWebSocket == null && typeof raw.isWebsocket === "boolean") {
+    s.isWebSocket = raw.isWebsocket;
+  }
+  if (s.websocketMessages == null && Array.isArray(raw.websocketMessages)) {
+    s.websocketMessages = raw.websocketMessages as Session["websocketMessages"];
+  }
+  return s;
+}
+
+function mergeSession(prev: Session | undefined, incoming: Session): Session {
+  if (!prev) return incoming;
+  const prevMsgs = prev.websocketMessages ?? [];
+  const nextMsgs = incoming.websocketMessages ?? [];
+  const websocketMessages =
+    nextMsgs.length >= prevMsgs.length ? nextMsgs : prevMsgs;
+  return { ...incoming, websocketMessages };
+}
 
 interface AppStore {
   page: NavPage;
@@ -30,6 +50,7 @@ interface AppStore {
   loadRules: () => Promise<void>;
   loadConfig: () => Promise<void>;
   loadCert: () => Promise<void>;
+  reloadSessions: () => Promise<void>;
   upsertSession: (session: Session, eventType?: string) => void;
   init: () => Promise<() => void>;
 }
@@ -103,14 +124,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ certInfo });
   },
 
+  reloadSessions: async () => {
+    const sessions = (await api.listSessions()).map((s) =>
+      normalizeSession(s as Session & Record<string, unknown>),
+    );
+    set({ sessions });
+  },
+
   upsertSession: (session, eventType?: string) => {
+    session = normalizeSession(session as Session & Record<string, unknown>);
     const isNew = get().sessions.every((x) => x.id !== session.id);
+    if (session.isWebSocket) {
+      const prev = get().sessions.find((x) => x.id === session.id);
+      const prevCount = prev?.websocketMessages?.length ?? 0;
+      const nextCount = session.websocketMessages?.length ?? 0;
+      console.info("[proxyhero] ws upsert", {
+        event: eventType,
+        id: session.id,
+        prevCount,
+        nextCount,
+        completed: session.completed,
+        lastOpcode: session.websocketMessages?.[session.websocketMessages.length - 1]?.opcode,
+        lastPayloadLen: session.websocketMessages?.[session.websocketMessages.length - 1]?.payload.length ?? 0,
+      });
+    }
     set((s) => {
       const idx = s.sessions.findIndex((x) => x.id === session.id);
+      const merged =
+        idx >= 0 ? mergeSession(s.sessions[idx], session) : session;
       const sessions =
         idx >= 0
-          ? s.sessions.map((x, i) => (i === idx ? session : x))
-          : [...s.sessions, session].slice(-10_000);
+          ? s.sessions.map((x, i) => (i === idx ? merged : x))
+          : [...s.sessions, merged].slice(-10_000);
       return { sessions };
     });
     if (
@@ -129,11 +174,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
       get().loadConfig(),
       get().loadCert(),
     ]);
-    const sessions = await api.listSessions();
+    const sessions = (await api.listSessions()).map((s) =>
+      normalizeSession(s as Session & Record<string, unknown>),
+    );
     set({ sessions });
-    const unlisten = await onSessionEvent((payload) =>
+    const unlistenEvent = await onSessionEvent((payload) =>
       get().upsertSession(payload.session, payload.type),
     );
-    return unlisten;
+    const unlistenResync = await onSessionResync(() => {
+      void get().reloadSessions();
+    });
+    return () => {
+      unlistenEvent();
+      unlistenResync();
+    };
   },
 }));

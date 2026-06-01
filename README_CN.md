@@ -117,9 +117,24 @@ proxyhero/                  # 源码目录
 
 - [架构与抓包原理（中文）](docs/architecture-and-capture_zh.md)
 
+## 抓包支持范围
+
+| 类型 | 支持 | 说明 |
+|------|------|------|
+| **HTTP** | ✅ | 明文请求/响应、Header、Body |
+| **HTTPS（MITM）** | ✅ | 需安装并信任 **ProxyHero CA**，且域名命中 SSL Include / 未命中 Exclude |
+| **CONNECT 隧道** | ⚠️ | 始终记录 CONNECT 会话；**SSL Exclude** 或未 MITM 的域名仅元数据（Host、200），不解密隧道内流量 |
+| **WebSocket（`ws://`）** | ✅ | HTTP/1.1 `Upgrade` 握手 + 消息帧 |
+| **WebSocket（`wss://`）** | ✅ | 同上，需 MITM 解密 TLS；MITM 侧 ALPN 固定 `http/1.1` |
+| **HTTP/2 普通请求** | ✅ | 上游可走 HTTP/2；同连接多路复用按 FIFO 关联请求/响应 |
+| **HTTP/2 WebSocket** | ❌ | 不支持 RFC 8441（`:method=CONNECT` + `:protocol=websocket`） |
+| **Certificate Pinning** | ❌ | 客户端校验证书指纹时无法 MITM |
+| **未走代理的流量** | ❌ | 仅抓取经系统/应用代理转发的连接 |
+
 ## 限制
 
 - 须信任 **ProxyHero CA** 才能解密 HTTPS；Certificate Pinning 的客户端无法 MITM。
+- SSL Exclude 或未 MITM 的 **WSS** 只能看到 CONNECT，无法抓取 WebSocket 消息。
 - 仅抓取经代理转发的流量；devServer 服务端转发段不经过浏览器代理。
 - HTTP/2 多路复用下同连接 FIFO 关联请求/响应，极高并发下可能错配。
 - 本工具用于本地联调，不替代业务网关或后端的鉴权能力。

@@ -15,6 +15,7 @@ use tokio::task::JoinHandle;
 
 use crate::handler::CaptureHandler;
 use crate::state::SharedState;
+use crate::init_tracing;
 
 pub struct ProxyServer {
     handle: Option<JoinHandle<()>>,
@@ -43,6 +44,9 @@ impl ProxyServer {
             return Err("proxy already running".into());
         }
 
+        init_tracing();
+        tracing::info!(port, "starting proxy server");
+
         let ca = load_or_create_ca(cert_dir)?;
         let handler = CaptureHandler::new(state);
         // 0.0.0.0：本机浏览器 + 局域网设备（真机 Wi-Fi 代理）均可连接
@@ -52,7 +56,8 @@ impl ProxyServer {
             .with_addr(addr)
             .with_ca(ca)
             .with_rustls_connector(aws_lc_rs::default_provider())
-            .with_http_handler(handler)
+            .with_http_handler(handler.clone())
+            .with_websocket_handler(handler)
             .with_graceful_shutdown(async move {
                 let _ = rx.await;
             })

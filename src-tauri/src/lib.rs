@@ -48,6 +48,7 @@ pub fn run_app(context: tauri::Context<tauri::Wry>) {
 
             let handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
+                proxy_core::init_tracing();
                 let data_dir: PathBuf = config::app_data_dir(&handle).expect("app data dir");
                 std::fs::create_dir_all(&data_dir).ok();
                 shutdown::register_emergency_data_dir(data_dir.clone());

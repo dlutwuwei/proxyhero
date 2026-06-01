@@ -57,3 +57,9 @@ export function onSessionEvent(
     handler(e.payload);
   });
 }
+
+export function onSessionResync(handler: () => void) {
+  return listen("session:resync", () => {
+    handler();
+  });
+}

@@ -14,20 +14,40 @@ export interface GroupItem {
   count: number;
 }
 
+function isConnect(s: Session): boolean {
+  return s.method.toUpperCase() === "CONNECT";
+}
+
+function shouldShowConnectSession(
+  s: Session,
+  showConnectRequests: boolean,
+  searchQuery: string,
+): boolean {
+  if (!isConnect(s)) return true;
+  if (showConnectRequests) return true;
+  if (searchQuery && matchesSearch(s, searchQuery)) return true;
+  return false;
+}
+
 function matchesProtocol(s: Session, filter: ProtocolFilter): boolean {
   if (filter === "all") return true;
+  if (filter === "websocket") return s.isWebSocket === true;
   if (filter === "https") {
-    return s.isHttps || (s.sslTunnel && s.method === "CONNECT");
+    if (s.isWebSocket) return false;
+    if (isConnect(s)) return s.sslTunnel;
+    return s.isHttps;
   }
-  if (s.method === "CONNECT") return false;
+  if (isConnect(s)) return false;
+  if (s.isWebSocket) return false;
   return !s.isHttps && s.scheme === "http";
 }
 
 function matchesStatus(s: Session, filter: StatusFilter): boolean {
   if (filter === "all") return true;
-  if (filter === "active") return !s.completed;
+  if (s.isWebSocket && (filter === "active" || filter === "1xx")) return true;
+  if (filter === "active") return !s.completed || s.isWebSocket === true;
   const status = s.status;
-  if (status == null) return false;
+  if (status == null) return s.isWebSocket === true;
   const bucket = `${Math.floor(status / 100)}xx` as StatusFilter;
   return bucket === filter;
 }
@@ -40,6 +60,11 @@ function matchesSearch(s: Session, q: string): boolean {
     s.path.toLowerCase().includes(lower) ||
     s.url.toLowerCase().includes(lower) ||
     s.method.toLowerCase().includes(lower) ||
+    (s.isWebSocket && "ws".includes(lower)) ||
+    (s.isWebSocket &&
+      (s.websocketMessages ?? []).some((m) =>
+        m.payload.toLowerCase().includes(lower),
+      )) ||
     (s.clientAddr?.toLowerCase().includes(lower) ?? false) ||
     (s.clientName?.toLowerCase().includes(lower) ?? false) ||
     (s.userAgent?.toLowerCase().includes(lower) ?? false)
@@ -94,17 +119,19 @@ export function useFilteredSessions(sessions: Session[]) {
       seqById.set(s.id, i + 1);
     });
 
-    const visible = showConnectRequests
-      ? sessions
-      : sessions.filter((s) => s.method !== "CONNECT");
+    const q = searchText.trim().toLowerCase();
+
+    const listSessions = sessions.filter((s) =>
+      shouldShowConnectSession(s, showConnectRequests, q),
+    );
 
     const domainGroups = buildGroups(
-      visible,
+      listSessions,
       (s) => s.host,
       (k) => k,
     );
     const appGroups = buildGroups(
-      visible,
+      listSessions,
       clientGroupKey,
       (k) =>
         k === UNIDENTIFIED_CLIENT_KEY
@@ -112,12 +139,12 @@ export function useFilteredSessions(sessions: Session[]) {
           : k,
     );
 
-    const filtered = visible.filter(
+    const filtered = listSessions.filter(
       (s) =>
         matchesSide(s, sideTab, sideSelection) &&
-        matchesProtocol(s, protocolFilter) &&
+        (q ? true : matchesProtocol(s, protocolFilter)) &&
         matchesStatus(s, statusFilter) &&
-        matchesSearch(s, searchText.trim().toLowerCase()),
+        matchesSearch(s, q),
     );
 
     return { filtered, domainGroups, appGroups, seqById };
