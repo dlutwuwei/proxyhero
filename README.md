@@ -53,6 +53,20 @@ Production build:
 pnpm tauri build
 ```
 
+### macOS installation (Release DMG)
+
+Release builds are **not signed or notarized with an Apple Developer account**. After installing from a GitHub Release DMG, macOS may report the app as damaged — this is Gatekeeper blocking an unsigned app, not a corrupt download.
+
+After dragging the app into **Applications**, run in Terminal:
+
+```bash
+xattr -cr /Applications/proxyhero.app
+```
+
+Then launch ProxyHero normally. Alternatively: right-click the app → **Open** → confirm (you may need to repeat after each update).
+
+For a public release that opens without this step, an Apple Developer account is required for code signing and notarization.
+
 Build frontend or Rust core only:
 
 ```bash

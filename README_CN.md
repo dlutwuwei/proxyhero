@@ -53,6 +53,20 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+### macOS 安装（Release DMG）
+
+当前 Release 包**未使用 Apple 开发者账号签名与公证**。从 GitHub Releases 下载 DMG 安装后，系统可能提示「已损坏，无法打开」，这是 Gatekeeper 拦截，并非安装包损坏。
+
+将应用拖入「应用程序」文件夹后，在终端执行：
+
+```bash
+xattr -cr /Applications/proxyhero.app
+```
+
+然后正常打开 ProxyHero。也可右键应用 → **打开** → 确认打开（每次更新安装后可能需重复上述步骤）。
+
+若需免此步骤的公开发布包，须使用 Apple 开发者账号对应用签名并公证。
+
 仅构建前端或 Rust 核心：
 
 ```bash
