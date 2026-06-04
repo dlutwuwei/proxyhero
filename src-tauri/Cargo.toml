@@ -1,5 +1,5 @@
 [package]
-name = "lk-debug-proxy"
+name = "proxy-debugg"
 version = "0.1.0"
 description = "ProxyHero (proxyhero) - MITM proxy for frontend integration debugging"
 authors = ["lk"]
