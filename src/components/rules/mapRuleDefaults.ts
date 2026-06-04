@@ -30,7 +30,8 @@ export function newLocalRule(): MapLocalRule {
     matchRule: { host: "api.example.com", path: "/user/info" },
     localFile: "",
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    autoHeaders: true,
+    headers: {},
   };
 }
 

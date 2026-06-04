@@ -62,7 +62,9 @@ export interface MapLocalRule {
   order: number;
   matchRule: MatchRule;
   localFile: string;
+  localBody?: string;
   status: number;
+  autoHeaders?: boolean;
   headers: Record<string, string>;
 }
 
