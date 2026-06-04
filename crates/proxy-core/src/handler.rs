@@ -13,6 +13,7 @@ use hudsucker::tokio_tungstenite::tungstenite::Message;
 
 use crate::branding::CA_CERT_FILE;
 use crate::client_ua::client_label;
+use crate::map_local::build_response_headers;
 use crate::matcher::{find_map_local, find_map_remote, should_mitm_ssl};
 use crate::request_target::{mitm_https_target, resolve_request_target};
 use crate::rules::{is_map_target_allowed, TlsPreset};
@@ -375,7 +376,7 @@ impl HttpHandler for CaptureHandler {
             session.map_type = Some("local".into());
             self.state.upsert_session(session).await;
 
-            let content = match tokio::fs::read(&local_rule.local_file).await {
+            let content = match local_rule.response_bytes().await {
                 Ok(c) => c,
                 Err(e) => {
                     let err_body = format!(r#"{{"error":"map local failed: {e}"}}"#);
@@ -395,12 +396,15 @@ impl HttpHandler for CaptureHandler {
                     return RequestOrResponse::Response(res);
                 }
             };
+            let response_headers = build_response_headers(
+                &local_rule.headers,
+                local_rule.auto_headers,
+                &local_rule.local_file,
+                &content,
+            );
             let mut builder = Response::builder().status(local_rule.status);
-            for (k, v) in &local_rule.headers {
+            for (k, v) in &response_headers {
                 builder = builder.header(k.as_str(), v.as_str());
-            }
-            if local_rule.headers.get("content-type").is_none() {
-                builder = builder.header("content-type", "application/octet-stream");
             }
             let res = builder.body(Body::from(content)).unwrap();
             let res = Self::capture_response_body(

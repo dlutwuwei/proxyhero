@@ -1,9 +1,22 @@
 use crate::rules::{MapLocalRule, MapRemoteRule, MatchRule, SslConfig, SslMode};
 use glob::Pattern;
 
+pub fn normalize_host(value: &str) -> String {
+    let mut v = value.trim().to_lowercase();
+    if let Some(rest) = v.strip_prefix("https://") {
+        v = rest.to_string();
+    } else if let Some(rest) = v.strip_prefix("http://") {
+        v = rest.to_string();
+    }
+    if let Some((host, _)) = v.split_once('/') {
+        v = host.to_string();
+    }
+    v.trim_end_matches('/').to_string()
+}
+
 pub fn host_matches(pattern: &str, host: &str) -> bool {
-    let pattern = pattern.trim().to_lowercase();
-    let host = host.to_lowercase();
+    let pattern = normalize_host(pattern);
+    let host = normalize_host(host);
     if pattern == host {
         return true;
     }
@@ -81,5 +94,30 @@ pub fn should_mitm_ssl(ssl: &SslConfig, host: &str) -> bool {
         SslMode::Default => !ssl.exclude_hosts.iter().any(|p| host_matches(p, host)),
         SslMode::Include => ssl.include_hosts.iter().any(|p| host_matches(p, host)),
         SslMode::Exclude => !ssl.exclude_hosts.iter().any(|p| host_matches(p, host)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_matches_ignores_trailing_slash_and_scheme() {
+        assert!(host_matches(
+            "trackstream.lkcoffee.com/",
+            "trackstream.lkcoffee.com"
+        ));
+        assert!(host_matches(
+            "https://trackstream.lkcoffee.com/",
+            "trackstream.lkcoffee.com"
+        ));
+    }
+
+    #[test]
+    fn path_matches_exact_api_path() {
+        assert!(path_matches(
+            Some("/api/employee/currentUser"),
+            "/api/employee/currentUser"
+        ));
     }
 }

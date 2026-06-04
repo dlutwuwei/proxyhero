@@ -89,9 +89,30 @@ pub struct MapLocalRule {
     pub order: i32,
     pub match_rule: MatchRule,
     pub local_file: String,
+    #[serde(default)]
+    pub local_body: Option<String>,
     pub status: u16,
+    #[serde(default = "default_true")]
+    pub auto_headers: bool,
     #[serde(default)]
     pub headers: std::collections::HashMap<String, String>,
+}
+
+impl MapLocalRule {
+    pub async fn response_bytes(&self) -> std::io::Result<Vec<u8>> {
+        if let Some(body) = self.local_body.as_deref() {
+            if !body.is_empty() {
+                return Ok(body.as_bytes().to_vec());
+            }
+        }
+        if self.local_file.trim().is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "no inline body or local file configured",
+            ));
+        }
+        tokio::fs::read(&self.local_file).await
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
