@@ -4,11 +4,12 @@ import { api } from "../api/tauri";
 import { ProxyToggleButton, useProxyEnabled } from "../components/ProxyControl";
 import { useT } from "../hooks/useT";
 import { useUpdater } from "../hooks/useUpdater";
+import { ensureNotificationPermission } from "../lib/notificationPermission";
 import { useAppStore } from "../stores/appStore";
 import { useLocaleStore } from "../stores/localeStore";
 import { useTrafficStore } from "../stores/trafficStore";
 import type { Locale } from "../i18n/messages";
-import type { TlsFingerprintMode, TlsPreset } from "../types";
+import type { AppConfig, TlsFingerprintMode, TlsPreset } from "../types";
 
 const CURRENT_VERSION = "0.1.0";
 
@@ -46,6 +47,16 @@ export function SettingsView() {
     checkForUpdates, 
     installUpdate 
   } = useUpdater();
+  const saveNotificationPrefs = async (
+    patch: Partial<Pick<AppConfig, "notificationsEnabled" | "promotionalEnabled">>,
+  ) => {
+    const next = { ...config!, ...patch };
+    if (patch.notificationsEnabled) {
+      await ensureNotificationPermission();
+    }
+    await api.saveConfig(next);
+    await loadConfig();
+  };
 
   useEffect(() => {
     if (config) setPort(config.proxyPort);
@@ -194,9 +205,59 @@ export function SettingsView() {
           </div>
         </SettingsCard>
 
-        <SettingsCard>
+        <SettingsCard className="sm:col-span-2">
           <h3 className="mb-3 text-sm font-medium">{t("notifications.title")}</h3>
-          <p className="text-xs text-[#888]">{t("notifications.checkReleases")}</p>
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">{t("notifications.enable")}</p>
+                <p className="text-xs text-[#888]">{t("notifications.enableDesc")}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.notificationsEnabled !== false}
+                onClick={() =>
+                  saveNotificationPrefs({
+                    notificationsEnabled: config.notificationsEnabled === false,
+                  })
+                }
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${config.notificationsEnabled !== false ? "bg-blue-500" : "bg-[#444]"}`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${config.notificationsEnabled !== false ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">{t("notifications.promotional")}</p>
+                <p className="text-xs text-[#888]">{t("notifications.promotionalDesc")}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.promotionalEnabled !== false}
+                disabled={config.notificationsEnabled === false}
+                onClick={() =>
+                  saveNotificationPrefs({
+                    promotionalEnabled: config.promotionalEnabled === false,
+                  })
+                }
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-40 ${config.promotionalEnabled !== false ? "bg-blue-500" : "bg-[#444]"}`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${config.promotionalEnabled !== false ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-[#888]">
+              {t("notifications.lastChecked")}:{" "}
+              {config.lastCheckedAt
+                ? new Date(config.lastCheckedAt).toLocaleString()
+                : t("notifications.never")}
+            </p>
+          </div>
         </SettingsCard>
 
         <SettingsCard className="col-span-full sm:col-span-2 xl:col-span-2">

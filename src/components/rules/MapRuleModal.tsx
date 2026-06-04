@@ -362,10 +362,10 @@ export function MapLocalModal({
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={draft.autoHeaders}
+              checked={draft.autoHeaders !== false}
               onChange={(e) => {
                 const autoHeaders = e.target.checked;
-                let next = { ...draft, autoHeaders };
+                let next: MapLocalRule = { ...draft, autoHeaders };
                 if (autoHeaders) {
                   next = applyDetectedHeaders(next, sourceMode);
                   setHeaderRows(headersToRows(next.headers));

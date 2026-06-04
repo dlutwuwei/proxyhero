@@ -106,11 +106,18 @@ export interface AppRules {
   tlsFingerprint?: TlsFingerprintConfig;
 }
 
+export type NotificationMessageType = "promo" | "tip" | "release";
+
 export interface AppConfig {
   proxyPort: number;
   maxSessions: number;
   captureEnabled: boolean;
   systemProxyEnabled: boolean;
+  notificationsEnabled: boolean;
+  promotionalEnabled: boolean;
+  lastCheckedAt?: string;
+  seenMessageIds: string[];
+  lastManifestVersion?: number;
 }
 
 export interface ProxyStatus {

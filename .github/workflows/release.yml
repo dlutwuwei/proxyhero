@@ -73,3 +73,21 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           args: ${{ matrix.args }}
+
+  upload-notifications:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate notifications manifest
+        run: node notifications/validate.mjs
+
+      - name: Upload notifications.json to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp notifications/manifest.json notifications.json
+          gh release upload "${{ github.ref_name }}" notifications.json --clobber

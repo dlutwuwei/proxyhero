@@ -1,0 +1,23 @@
+name: Notifications
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "notifications/**"
+      - ".github/workflows/notifications.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "notifications/**"
+      - ".github/workflows/notifications.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate manifest
+        run: node notifications/validate.mjs

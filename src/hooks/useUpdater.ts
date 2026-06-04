@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { useT } from "./useT";
 import { useAppStore } from "../stores/appStore";
 
@@ -75,29 +74,6 @@ export function useUpdater() {
     }
   };
 
-  const checkNotificationPermission = async () => {
-    let permissionGranted = await isPermissionGranted();
-    if (!permissionGranted) {
-      const permission = await requestPermission();
-      permissionGranted = permission === "granted";
-    }
-    return permissionGranted;
-  };
-
-  const sendReleaseNotification = async (version: string) => {
-    const hasPermission = await checkNotificationPermission();
-    if (hasPermission) {
-      await sendNotification({
-        title: t("notifications.newRelease"),
-        body: `ProxyHero v${version} 已发布`,
-      });
-    }
-  };
-
-  useEffect(() => {
-    checkForUpdates();
-  }, []);
-
   return {
     checking,
     updateAvailable,
@@ -106,6 +82,5 @@ export function useUpdater() {
     downloadProgress,
     checkForUpdates,
     installUpdate,
-    sendReleaseNotification,
   };
 }

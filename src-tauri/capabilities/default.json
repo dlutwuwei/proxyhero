@@ -8,6 +8,8 @@
     "opener:default",
     "shell:allow-open",
     "shell:allow-execute",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "updater:default",
+    "notification:default"
   ]
 }

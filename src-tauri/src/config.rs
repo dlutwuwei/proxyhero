@@ -11,6 +11,22 @@ pub struct AppConfig {
     pub max_sessions: usize,
     pub capture_enabled: bool,
     pub system_proxy_enabled: bool,
+    #[serde(default = "default_notifications_enabled")]
+    pub notifications_enabled: bool,
+    #[serde(default = "default_promotional_enabled")]
+    pub promotional_enabled: bool,
+    pub last_checked_at: Option<String>,
+    #[serde(default)]
+    pub seen_message_ids: Vec<String>,
+    pub last_manifest_version: Option<u32>,
+}
+
+fn default_notifications_enabled() -> bool {
+    true
+}
+
+fn default_promotional_enabled() -> bool {
+    true
 }
 
 impl Default for AppConfig {
@@ -20,6 +36,11 @@ impl Default for AppConfig {
             max_sessions: 10_000,
             capture_enabled: true,
             system_proxy_enabled: false,
+            notifications_enabled: true,
+            promotional_enabled: true,
+            last_checked_at: None,
+            seen_message_ids: vec![],
+            last_manifest_version: None,
         }
     }
 }

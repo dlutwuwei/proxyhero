@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": 1,
+  "messages": [
+    {
+      "id": "welcome-proxyhero",
+      "type": "tip",
+      "title": { "zh": "欢迎使用 ProxyHero", "en": "Welcome to ProxyHero" },
+      "body": {
+        "zh": "在设置中可配置 Map 规则与 SSL，开始调试前端联调流量。",
+        "en": "Configure Map rules and SSL in Settings to start debugging API traffic."
+      },
+      "startsAt": "2026-01-01T00:00:00Z",
+      "endsAt": "2027-12-31T23:59:59Z",
+      "minAppVersion": "0.1.0",
+      "priority": 1
+    }
+  ]
+}

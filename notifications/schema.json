@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["schemaVersion", "messages"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "manifestVersion": { "type": "integer", "minimum": 1 },
+    "messages": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/message" }
+    }
+  },
+  "definitions": {
+    "localeText": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "message": {
+      "type": "object",
+      "required": ["id", "type", "title", "body", "startsAt", "endsAt"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "type": { "type": "string", "enum": ["promo", "tip", "release"] },
+        "title": { "$ref": "#/definitions/localeText" },
+        "body": { "$ref": "#/definitions/localeText" },
+        "actionUrl": { "type": "string", "format": "uri" },
+        "startsAt": { "type": "string", "format": "date-time" },
+        "endsAt": { "type": "string", "format": "date-time" },
+        "minAppVersion": { "type": "string" },
+        "maxAppVersion": { "type": ["string", "null"] },
+        "priority": { "type": "integer" }
+      }
+    }
+  }
+}
