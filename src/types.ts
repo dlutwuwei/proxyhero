@@ -64,7 +64,7 @@ export interface MapLocalRule {
   localFile: string;
   localBody?: string;
   status: number;
-  autoHeaders: boolean;
+  autoHeaders?: boolean;
   headers: Record<string, string>;
 }
 
