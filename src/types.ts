@@ -80,6 +80,7 @@ export interface MapToTarget {
   port: number;
   preservePath: boolean;
   preserveQuery: boolean;
+  preserveHost?: boolean;
 }
 
 export type SslMode = "default" | "include" | "exclude";

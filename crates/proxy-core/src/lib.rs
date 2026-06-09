@@ -4,6 +4,7 @@ pub mod client_ua;
 pub mod curl;
 pub mod handler;
 pub mod map_local;
+pub mod map_remote;
 pub mod matcher;
 pub mod request_target;
 pub mod rules;

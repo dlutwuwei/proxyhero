@@ -313,20 +313,20 @@ mod tests {
     }
 
     #[test]
-    fn luckin_ws_keys_align_with_wss_context() {
+    fn ws_keys_align_with_wss_context() {
         let headers = vec![
             ("Upgrade".into(), "websocket".into()),
             ("Connection".into(), "Upgrade".into()),
             ("Sec-WebSocket-Key".into(), "OxvNx1gfi8v5I6WtUhYAOA==".into()),
             ("Sec-WebSocket-Version".into(), "13".into()),
-            ("Host".into(), "hmonitortest03.lkcoffee.com".into()),
+            ("Host".into(), "ws.example.com".into()),
         ];
         let mut session = Session::new(
             "s1".into(),
             "GET".into(),
-            "https://hmonitortest03.lkcoffee.com/luckyhmonitor/ws/track/report/web".into(),
-            "hmonitortest03.lkcoffee.com".into(),
-            "/luckyhmonitor/ws/track/report/web".into(),
+            "https://ws.example.com/app/ws/track/report/web".into(),
+            "ws.example.com".into(),
+            "/app/ws/track/report/web".into(),
             "https".into(),
         );
         session.is_websocket = true;
@@ -342,7 +342,7 @@ mod tests {
         apply_websocket_target(&mut session);
 
         let addr: SocketAddr = "127.0.0.1:54321".parse().unwrap();
-        let uri: Uri = "wss://hmonitortest03.lkcoffee.com/luckyhmonitor/ws/track/report/web"
+        let uri: Uri = "wss://ws.example.com/app/ws/track/report/web"
             .parse()
             .unwrap();
         let ctx_keys = ws_key_candidates_for(

@@ -265,7 +265,7 @@ export function MapLocalModal({
             {t("rules.modal.matchHost")}
             <input
               className="mono mt-1 w-full rounded border border-[#444] bg-[#1e1e1e] px-2 py-1.5"
-              placeholder="trackstream.lkcoffee.com"
+              placeholder="trackstream.example.com"
               value={draft.matchRule.host}
               onChange={(e) =>
                 setDraft({

@@ -135,6 +135,8 @@ pub struct MapToTarget {
     pub preserve_path: bool,
     #[serde(default)]
     pub preserve_query: bool,
+    #[serde(default)]
+    pub preserve_host: bool,
 }
 
 fn default_true() -> bool {
@@ -196,6 +198,7 @@ fn map_remote_preset(name: &str, host: &str, port: u16, order: i32) -> MapRemote
             port,
             preserve_path: true,
             preserve_query: true,
+            preserve_host: false,
         },
     }
 }

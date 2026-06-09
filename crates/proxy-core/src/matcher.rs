@@ -53,7 +53,10 @@ pub fn path_matches(pattern: Option<&str>, path: &str) -> bool {
 
 pub fn match_rule_matches(rule: &MatchRule, scheme: &str, host: &str, path: &str) -> bool {
     if let Some(ref proto) = rule.protocol {
-        if proto != "*" && proto != scheme {
+        let proto = proto.trim();
+        if proto != "*"
+            && !proto.eq_ignore_ascii_case(scheme)
+        {
             return false;
         }
     }
@@ -104,12 +107,12 @@ mod tests {
     #[test]
     fn host_matches_ignores_trailing_slash_and_scheme() {
         assert!(host_matches(
-            "trackstream.lkcoffee.com/",
-            "trackstream.lkcoffee.com"
+            "trackstream.example.com/",
+            "trackstream.example.com"
         ));
         assert!(host_matches(
-            "https://trackstream.lkcoffee.com/",
-            "trackstream.lkcoffee.com"
+            "https://trackstream.example.com/",
+            "trackstream.example.com"
         ));
     }
 

@@ -225,22 +225,22 @@ mod tests {
 
     use super::SharedState;
 
-    fn luckin_session(id: &str, client: &str) -> Session {
+    fn sample_ws_session(id: &str, client: &str) -> Session {
         let headers = vec![
             ("Upgrade".into(), "websocket".into()),
             ("Connection".into(), "Upgrade".into()),
             ("Sec-WebSocket-Key".into(), "OxvNx1gfi8v5I6WtUhYAOA==".into()),
             ("Sec-WebSocket-Version".into(), "13".into()),
             ("Sec-WebSocket-Extensions".into(), "permessage-deflate; client_max_window_bits".into()),
-            ("Host".into(), "hmonitortest03.lkcoffee.com".into()),
+            ("Host".into(), "ws.example.com".into()),
             ("User-Agent".into(), "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)".into()),
         ];
         let mut session = Session::new(
             id.into(),
             "GET".into(),
-            "https://hmonitortest03.lkcoffee.com/luckyhmonitor/ws/track/report/web".into(),
-            "hmonitortest03.lkcoffee.com".into(),
-            "/luckyhmonitor/ws/track/report/web".into(),
+            "https://ws.example.com/app/ws/track/report/web".into(),
+            "ws.example.com".into(),
+            "/app/ws/track/report/web".into(),
             "https".into(),
         );
         session.is_websocket = true;
@@ -258,9 +258,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn luckin_resolve_ws_session_by_alias() {
+    async fn resolve_ws_session_by_alias() {
         let state = SharedState::new(100, std::env::temp_dir());
-        let session = luckin_session("luckin-1", "192.168.1.10:54321");
+        let session = sample_ws_session("ws-1", "192.168.1.10:54321");
         state.register_ws_session_aliases(&session).await;
         state
             .sessions
@@ -269,7 +269,7 @@ mod tests {
             .insert(session.id.clone(), session);
 
         let addr: SocketAddr = "192.168.1.10:54321".parse().unwrap();
-        let uri: Uri = "wss://hmonitortest03.lkcoffee.com/luckyhmonitor/ws/track/report/web"
+        let uri: Uri = "wss://ws.example.com/app/ws/track/report/web"
             .parse()
             .unwrap();
         let keys = ws_key_candidates_for(
@@ -285,13 +285,13 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(found.as_deref(), Some("luckin-1"));
+        assert_eq!(found.as_deref(), Some("ws-1"));
     }
 
     #[tokio::test]
-    async fn luckin_resolve_ws_session_fallback_by_host_path() {
+    async fn resolve_ws_session_fallback_by_host_path() {
         let state = SharedState::new(100, std::env::temp_dir());
-        let session = luckin_session("luckin-2", "192.168.1.10:54321");
+        let session = sample_ws_session("ws-2", "192.168.1.10:54321");
         state
             .sessions
             .write()
@@ -299,8 +299,8 @@ mod tests {
             .insert(session.id.clone(), session);
 
         let sessions = state.sessions.read().await;
-        let target_host = "hmonitortest03.lkcoffee.com";
-        let target_path = "/luckyhmonitor/ws/track/report/web";
+        let target_host = "ws.example.com";
+        let target_path = "/app/ws/track/report/web";
         let found = sessions.iter().find_map(|(id, s)| {
             if !s.is_websocket {
                 return None;
@@ -316,11 +316,11 @@ mod tests {
             }
             None
         });
-        assert_eq!(found.as_deref(), Some("luckin-2"));
+        assert_eq!(found.as_deref(), Some("ws-2"));
     }
 
     #[test]
-    fn luckin_hudsucker_upgrade_headers() {
+    fn hudsucker_upgrade_headers_detects_websocket() {
         use http::HeaderMap;
         use hudsucker::hyper::{header, Request};
 
@@ -333,11 +333,11 @@ mod tests {
             "sec-websocket-extensions",
             "permessage-deflate; client_max_window_bits".parse().unwrap(),
         );
-        headers.insert(header::HOST, "hmonitortest03.lkcoffee.com".parse().unwrap());
+        headers.insert(header::HOST, "ws.example.com".parse().unwrap());
 
         let req = Request::builder()
             .method("GET")
-            .uri("https://hmonitortest03.lkcoffee.com/luckyhmonitor/ws/track/report/web")
+            .uri("https://ws.example.com/app/ws/track/report/web")
             .version(http::Version::HTTP_11)
             .header(header::UPGRADE, "websocket")
             .header(header::CONNECTION, "Upgrade")
@@ -352,8 +352,8 @@ mod tests {
         let keys = ws_key_candidates_for(
             addr,
             headers.get(header::HOST).unwrap().to_str().unwrap(),
-            "/luckyhmonitor/ws/track/report/web",
-            "/luckyhmonitor/ws/track/report/web",
+            "/app/ws/track/report/web",
+            "/app/ws/track/report/web",
         );
         assert!(!keys.is_empty());
     }

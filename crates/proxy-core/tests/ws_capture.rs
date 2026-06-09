@@ -24,7 +24,7 @@ use time::{Duration, OffsetDateTime};
 
 const HELLO: Utf8Bytes = Utf8Bytes::from_static("hello");
 const WORLD: Utf8Bytes = Utf8Bytes::from_static("world");
-const WS_PATH: &str = "/luckyhmonitor/ws/track/report/web";
+const WS_PATH: &str = "/app/ws/track/report/web";
 
 async fn ws_echo_server(
     req: Request<hudsucker::hyper::body::Incoming>,

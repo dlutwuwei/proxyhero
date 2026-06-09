@@ -295,9 +295,9 @@ mod ws_tests {
         let mut session = Session::new(
             "id".into(),
             "GET".into(),
-            "https://hmonitortest03.lkcoffee.com:443/luckyhmonitor/ws/track/report/web".into(),
-            "hmonitortest03.lkcoffee.com".into(),
-            "/luckyhmonitor/ws/track/report/web".into(),
+            "https://ws.example.com:443/app/ws/track/report/web".into(),
+            "ws.example.com".into(),
+            "/app/ws/track/report/web".into(),
             "https".into(),
         );
         apply_websocket_target(&mut session);
@@ -305,7 +305,7 @@ mod ws_tests {
         assert!(session.is_https);
         assert_eq!(
             session.url,
-            "wss://hmonitortest03.lkcoffee.com:443/luckyhmonitor/ws/track/report/web"
+            "wss://ws.example.com:443/app/ws/track/report/web"
         );
     }
 
@@ -315,11 +315,11 @@ mod ws_tests {
 
         let mut parts = Request::builder()
             .method("GET")
-            .uri("https://hmonitortest03.lkcoffee.com/luckyhmonitor/ws/track/report/web")
+            .uri("https://ws.example.com/app/ws/track/report/web")
             .version(http::Version::HTTP_11)
             .header("Sec-WebSocket-Key", "OxvNx1gfi8v5I6WtUhYAOA==")
             .header("Sec-WebSocket-Version", "13")
-            .header(header::HOST, "hmonitortest03.lkcoffee.com")
+            .header(header::HOST, "ws.example.com")
             .body(())
             .unwrap()
             .into_parts()

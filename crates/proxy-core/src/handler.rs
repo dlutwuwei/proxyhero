@@ -14,6 +14,7 @@ use hudsucker::tokio_tungstenite::tungstenite::Message;
 use crate::branding::CA_CERT_FILE;
 use crate::client_ua::client_label;
 use crate::map_local::build_response_headers;
+use crate::map_remote::{build_map_remote_forward, forward_map_remote_http, map_remote_uses_direct_http, MapRemoteForward};
 use crate::matcher::{find_map_local, find_map_remote, should_mitm_ssl};
 use crate::request_target::{mitm_https_target, resolve_request_target};
 use crate::rules::{is_map_target_allowed, TlsPreset};
@@ -142,6 +143,44 @@ impl CaptureHandler {
             Err(e) => {
                 tracing::warn!("specter forward failed for {url}: {e}");
                 let err_body = format!(r#"{{"error":"tls fingerprint forward failed: {e}"}}"#);
+                let res = Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
+                    .header("content-type", "application/json")
+                    .body(Body::from(err_body))
+                    .unwrap();
+                Self::capture_response_body(&self.state, session_id, res, 0).await
+            }
+        }
+    }
+
+    async fn forward_map_remote(
+        &self,
+        session_id: &str,
+        method: &str,
+        connect_url: &str,
+        host_header: &str,
+        headers: &http::HeaderMap,
+        body: &[u8],
+        started: Instant,
+    ) -> Response<Body> {
+        match forward_map_remote_http(method, connect_url, host_header, headers, body).await {
+            Ok((parts, raw_body)) => {
+                let mut builder = Response::builder().status(parts.status);
+                for (k, v) in parts.headers.iter() {
+                    builder = builder.header(k, v);
+                }
+                let res = builder.body(Body::from(raw_body)).unwrap();
+                Self::capture_response_body(
+                    &self.state,
+                    session_id,
+                    res,
+                    started.elapsed().as_millis() as u64,
+                )
+                .await
+            }
+            Err(e) => {
+                tracing::warn!("map remote forward failed for {connect_url}: {e}");
+                let err_body = format!(r#"{{"error":"map remote forward failed: {e}"}}"#);
                 let res = Response::builder()
                     .status(StatusCode::BAD_GATEWAY)
                     .header("content-type", "application/json")
@@ -421,26 +460,62 @@ impl HttpHandler for CaptureHandler {
 
         // Map Remote 改写（在 TLS 指纹转发前也要生效）
         let mut upstream_url = url.clone();
+        let mut map_remote_forward: Option<MapRemoteForward> = None;
         if let Some(remote_rule) = find_map_remote(&rules.map_remote, &scheme, &host, &path_str) {
             if is_map_target_allowed(&remote_rule.map_to.host, &rules.allowed_map_hosts) {
                 session.mapped_rule_id = Some(remote_rule.id.clone());
                 session.mapped_rule_name = Some(remote_rule.name.clone());
                 session.map_type = Some("remote".into());
 
-                let map = &remote_rule.map_to;
-                let path_and_query = if map.preserve_path {
-                    uri.path_and_query()
-                        .map(|pq| pq.as_str())
-                        .unwrap_or("/")
-                        .to_string()
-                } else {
-                    "/".to_string()
-                };
-                upstream_url = format!(
-                    "{}://{}:{}{}",
-                    map.protocol, map.host, map.port, path_and_query
-                );
+                let original_host = parts
+                    .headers
+                    .get(header::HOST)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or(&host);
+                let forward =
+                    build_map_remote_forward(&remote_rule.map_to, &uri, original_host);
+                upstream_url = forward.connect_url.clone();
+                map_remote_forward = Some(forward);
                 session.url = upstream_url.clone();
+            }
+        }
+
+        if let Some(forward) = map_remote_forward.as_ref() {
+            if !is_ws && !is_connect {
+                tracing::info!(
+                    session_id = %session_id,
+                    connect_url = %forward.connect_url,
+                    host_header = %forward.host_header,
+                    target_protocol = %forward.target_protocol,
+                    "map remote: direct forward"
+                );
+                self.state.upsert_session(session).await;
+                let res = if map_remote_uses_direct_http(forward) {
+                    self.forward_map_remote(
+                        &session_id,
+                        &method,
+                        &forward.connect_url,
+                        &forward.host_header,
+                        &parts.headers,
+                        &capture_body,
+                        started,
+                    )
+                    .await
+                } else {
+                    tracing::warn!(
+                        connect_url = %forward.connect_url,
+                        "map remote https target is not supported via hudsucker, use http for local upstream"
+                    );
+                    let err_body = r#"{"error":"map remote https target requires TLS fingerprint mode or use http protocol for local upstream"}"#;
+                    let res = Response::builder()
+                        .status(StatusCode::BAD_GATEWAY)
+                        .header("content-type", "application/json")
+                        .body(Body::from(err_body))
+                        .unwrap();
+                    Self::capture_response_body(&self.state, &session_id, res, 0).await
+                };
+                self.active_session_id = None;
+                return RequestOrResponse::Response(res);
             }
         }
 
@@ -464,6 +539,12 @@ impl HttpHandler for CaptureHandler {
                     .await;
                 self.active_session_id = None;
                 return RequestOrResponse::Response(res);
+            }
+        }
+
+        if parts.uri.host().is_none() {
+            if let Ok(parsed) = upstream_url.parse::<hudsucker::hyper::Uri>() {
+                parts.uri = parsed;
             }
         }
 
@@ -503,7 +584,7 @@ impl HttpHandler for CaptureHandler {
     async fn handle_error(
         &mut self,
         _ctx: &HttpContext,
-        _err: hyper_util::client::legacy::Error,
+        err: hyper_util::client::legacy::Error,
     ) -> Response<Body> {
         let session_id = match self.active_session_id.take() {
             Some(id) => id,
@@ -515,10 +596,12 @@ impl HttpHandler for CaptureHandler {
             }
         };
 
+        tracing::warn!(session_id = %session_id, error = %err, "hudsucker upstream request failed");
+        let err_body = format!(r#"{{"error":"upstream request failed: {err}"}}"#);
         let res = Response::builder()
             .status(StatusCode::BAD_GATEWAY)
             .header("content-type", "application/json")
-            .body(Body::from(r#"{"error":"upstream request failed"}"#))
+            .body(Body::from(err_body))
             .expect("build response");
 
         Self::capture_response_body(&self.state, &session_id, res, 0).await
