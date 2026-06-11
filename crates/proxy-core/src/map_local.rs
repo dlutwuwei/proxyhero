@@ -109,9 +109,8 @@ pub fn build_response_headers(
     } else {
         configured.clone()
     };
-    if !has_header(&out, "content-length") {
-        out.insert("Content-Length".into(), body.len().to_string());
-    }
+    out.retain(|k, _| k.to_lowercase() != "content-length");
+    out.insert("Content-Length".into(), body.len().to_string());
     out
 }
 
@@ -142,5 +141,14 @@ mod tests {
             Some("application/custom")
         );
         assert_eq!(header_value(&merged, "Content-Length"), Some("2"));
+    }
+
+    #[test]
+    fn merge_overrides_stale_content_length() {
+        let mut configured = HashMap::new();
+        configured.insert("Content-Type".into(), "application/json".into());
+        configured.insert("Content-Length".into(), "999999".into());
+        let merged = build_response_headers(&configured, false, "", br#"{"ok":true}"#);
+        assert_eq!(header_value(&merged, "Content-Length"), Some("11"));
     }
 }

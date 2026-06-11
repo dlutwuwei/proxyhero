@@ -5,10 +5,16 @@ import type {
   AppConfig,
   AppRules,
   CertInfo,
+  MapLocalRule,
+  MapRemoteRule,
   NavPage,
   ProxyStatus,
   Session,
 } from "../types";
+import {
+  localRuleFromSession,
+  remoteRuleFromSession,
+} from "../components/rules/mapRuleDefaults";
 
 function normalizeSession(raw: Session & Record<string, unknown>): Session {
   const s = { ...raw };
@@ -42,6 +48,12 @@ interface AppStore {
   certInfo: CertInfo | null;
   message: string | null;
   setMessage: (m: string | null) => void;
+  pendingRemoteRule: MapRemoteRule | null;
+  openRemoteRuleFromSession: (session: Session) => void;
+  clearPendingRemoteRule: () => void;
+  pendingLocalRule: MapLocalRule | null;
+  openLocalRuleFromSession: (session: Session) => Promise<void>;
+  clearPendingLocalRule: () => void;
   selectSession: (id: string | null) => void;
   refreshStatus: () => Promise<void>;
   toggleProxy: () => Promise<void>;
@@ -67,6 +79,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
   certInfo: null,
   message: null,
   setMessage: (m) => set({ message: m }),
+  pendingRemoteRule: null,
+  openRemoteRuleFromSession: (session) => {
+    const rules = get().rules;
+    const maxOrder = rules?.mapRemote.reduce((m, r) => Math.max(m, r.order), -1) ?? -1;
+    set({
+      pendingRemoteRule: remoteRuleFromSession(session, maxOrder + 1),
+      page: "rules",
+    });
+  },
+  clearPendingRemoteRule: () => set({ pendingRemoteRule: null }),
+  pendingLocalRule: null,
+  openLocalRuleFromSession: async (session) => {
+    const rules = get().rules;
+    const maxOrder = rules?.mapLocal.reduce((m, r) => Math.max(m, r.order), -1) ?? -1;
+    let source = session;
+    try {
+      const fresh = await api.getSession(session.id);
+      if (fresh) source = fresh;
+    } catch {
+      /* use in-memory session */
+    }
+    set({
+      pendingLocalRule: localRuleFromSession(source, maxOrder + 1),
+      page: "rules",
+    });
+  },
+  clearPendingLocalRule: () => set({ pendingLocalRule: null }),
   selectSession: (id) => set({ selectedId: id }),
 
   refreshStatus: async () => {

@@ -73,7 +73,7 @@ function matchesSearch(s: Session, q: string): boolean {
 
 export const UNIDENTIFIED_CLIENT_KEY = "__unidentified__";
 
-function clientGroupKey(s: Session): string {
+export function clientGroupKey(s: Session): string {
   if (!s.userAgent?.trim()) return UNIDENTIFIED_CLIENT_KEY;
   return s.clientName || s.clientAddr || UNIDENTIFIED_CLIENT_KEY;
 }

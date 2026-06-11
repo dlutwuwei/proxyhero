@@ -42,14 +42,22 @@ export function ResponsePane({ session }: { session: Session }) {
             );
           case "body":
             return (
-              <div className="flex min-h-[120px] flex-col">
-                <BodyViewer msg={session.response} fill />
+              <div className="flex h-full min-h-0 flex-col">
+                <BodyViewer msg={session.response} fill autoFormat />
               </div>
             );
           case "raw":
-            return <RawHttpView text={buildRawResponse(session)} />;
+            return (
+              <div className="flex h-full min-h-0 flex-col">
+                <RawHttpView text={buildRawResponse(session)} />
+              </div>
+            );
           case "tree":
-            return <JsonTreeView text={bodyText(session.response)} />;
+            return (
+              <div className="flex h-full min-h-0 flex-col">
+                <JsonTreeView text={bodyText(session.response)} />
+              </div>
+            );
           case "summary":
             return (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 p-3 text-xs">

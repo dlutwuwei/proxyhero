@@ -36,6 +36,10 @@ export function RulesView() {
   const rules = useAppStore((s) => s.rules);
   const loadRules = useAppStore((s) => s.loadRules);
   const setMessage = useAppStore((s) => s.setMessage);
+  const pendingRemoteRule = useAppStore((s) => s.pendingRemoteRule);
+  const clearPendingRemoteRule = useAppStore((s) => s.clearPendingRemoteRule);
+  const pendingLocalRule = useAppStore((s) => s.pendingLocalRule);
+  const clearPendingLocalRule = useAppStore((s) => s.clearPendingLocalRule);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [tab, setTab] = useState<"remote" | "local">("remote");
   const [remoteModal, setRemoteModal] = useState<MapRemoteRule | null>(null);
@@ -44,6 +48,20 @@ export function RulesView() {
   useEffect(() => {
     api.getPresets().then(setPresets);
   }, []);
+
+  useEffect(() => {
+    if (!pendingRemoteRule) return;
+    setTab("remote");
+    setRemoteModal(pendingRemoteRule);
+    clearPendingRemoteRule();
+  }, [pendingRemoteRule, clearPendingRemoteRule]);
+
+  useEffect(() => {
+    if (!pendingLocalRule) return;
+    setTab("local");
+    setLocalModal(pendingLocalRule);
+    clearPendingLocalRule();
+  }, [pendingLocalRule, clearPendingLocalRule]);
 
   if (!rules) return null;
 

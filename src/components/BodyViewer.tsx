@@ -1,14 +1,9 @@
+import { useEffect, useMemo, useState } from "react";
 import { useT } from "../hooks/useT";
 import type { HttpMessage } from "../types";
 import { normalizeMsg } from "./traffic/httpInspectorUtils";
-
-function tryFormatJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
-}
+import { BodyCodeEditor } from "./traffic/inspector/BodyCodeEditor";
+import { BODY_LOAD_WARN_BYTES } from "./traffic/inspector/largeContent";
 
 function TruncatedHint({
   size,
@@ -20,54 +15,102 @@ function TruncatedHint({
   const t = useT();
   if (!truncated) return null;
   return (
-    <p className="border-b border-amber-900/50 bg-amber-950/40 px-4 py-1.5 text-xs text-amber-200/90">
+    <p className="shrink-0 border-b border-amber-900/50 bg-amber-950/40 px-4 py-1.5 text-xs text-amber-200/90">
       {t("traffic.inspector.truncated", { size })}
     </p>
   );
 }
 
+function contentTypeOf(msg: HttpMessage): string | undefined {
+  return msg.headers.find(([k]) => k.toLowerCase() === "content-type")?.[1];
+}
+
+function bodyByteSize(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
 export function BodyViewer({
   msg,
   fill,
+  autoFormat = false,
 }: {
   msg?: HttpMessage;
   fill?: boolean;
+  autoFormat?: boolean;
 }) {
   const t = useT();
-  if (!msg) {
+  const [forceLoad, setForceLoad] = useState(false);
+  const normalized = useMemo(() => (msg ? normalizeMsg(msg) : null), [msg]);
+  const rawText = useMemo(() => {
+    if (!normalized) return "";
+    return normalized.isBinary
+      ? normalized.bodyBase64 ?? ""
+      : normalized.body;
+  }, [normalized]);
+  const contentType = useMemo(
+    () => (msg ? contentTypeOf(msg) : undefined),
+    [msg],
+  );
+  const byteSize = useMemo(() => bodyByteSize(rawText), [rawText]);
+  const isHeavy = byteSize > BODY_LOAD_WARN_BYTES;
+
+  useEffect(() => {
+    setForceLoad(false);
+  }, [rawText]);
+
+  if (!msg || !normalized) {
     return <div className="p-4 text-sm text-[#888]">{t("traffic.inspector.noContent")}</div>;
   }
-  const normalized = normalizeMsg(msg);
-  if (normalized.isBinary) {
+
+  if (normalized.isBinary && !normalized.bodyBase64) {
     return (
-      <div>
+      <div className="p-4 text-sm text-[#888]">
         <TruncatedHint size={normalized.size} truncated={normalized.truncated} />
-        <div className="p-4 text-sm text-[#888]">
-          {t("traffic.inspector.binary", { size: normalized.size })}
-          {normalized.bodyBase64 ? (
-            <pre className="mono scroll-thin mt-2 max-h-96 overflow-auto text-xs text-[#aaa]">
-              {normalized.bodyBase64}
-            </pre>
-          ) : (
-            <span className="mt-2 block text-[#666]">
-              {t("traffic.inspector.bodyNotCached")}
-            </span>
-          )}
+        {t("traffic.inspector.binary", { size: normalized.size })}
+        <span className="mt-2 block text-[#666]">
+          {t("traffic.inspector.bodyNotCached")}
+        </span>
+      </div>
+    );
+  }
+
+  const shellClass = fill ? "flex h-full min-h-0 flex-col" : "flex max-h-96 flex-col";
+
+  if (isHeavy && !forceLoad) {
+    const sizeMb = (byteSize / (1024 * 1024)).toFixed(1);
+    return (
+      <div className={shellClass}>
+        <TruncatedHint size={normalized.size} truncated={normalized.truncated} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <p className="text-sm text-amber-200/90">
+            {t("traffic.inspector.bodyHeavy", { size: sizeMb })}
+          </p>
+          <button
+            type="button"
+            onClick={() => setForceLoad(true)}
+            className="rounded bg-[#094771] px-4 py-1.5 text-xs text-white hover:bg-[#0e5a8a]"
+          >
+            {t("traffic.inspector.bodyLoadAnyway")}
+          </button>
         </div>
       </div>
     );
   }
-  const text = tryFormatJson(normalized.body);
+
   return (
-    <div>
+    <div className={shellClass}>
       <TruncatedHint size={normalized.size} truncated={normalized.truncated} />
-      <pre
-        className={`mono scroll-thin overflow-auto p-4 text-xs leading-relaxed text-[#d4d4d4] ${
-          fill ? "min-h-0 flex-1" : "max-h-96"
-        }`}
-      >
-        {text || "(empty)"}
-      </pre>
+      {normalized.isBinary && (
+        <p className="shrink-0 px-4 pt-2 text-xs text-[#888]">
+          {t("traffic.inspector.binary", { size: normalized.size })}
+        </p>
+      )}
+      <BodyCodeEditor
+        text={rawText}
+        contentType={contentType}
+        binary={normalized.isBinary}
+        autoFormat={autoFormat && !isHeavy}
+      />
     </div>
   );
 }

@@ -1,9 +1,28 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useT } from "../../hooks/useT";
+import { useAppStore } from "../../stores/appStore";
+import { useLocaleStore } from "../../stores/localeStore";
+import { useTrafficStore } from "../../stores/trafficStore";
 import type { Session } from "../../types";
 import { copyToClipboard } from "../../utils/clipboard";
+import { ContextMenu } from "../ui/ContextMenu";
+import { clientGroupKey } from "../../hooks/useFilteredSessions";
+import {
+  buildSessionContextMenu,
+  columnFromTarget,
+  sessionSslEnabled,
+  type SessionColumn,
+} from "./sessionContextMenu";
 import { SessionRow } from "./SessionRow";
+
+type ContextMenuState = {
+  x: number;
+  y: number;
+  session: Session;
+  column: SessionColumn;
+  seq: number;
+};
 
 export function SessionTable({
   sessions,
@@ -19,8 +38,14 @@ export function SessionTable({
   emptyHint: string;
 }) {
   const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const rules = useAppStore((s) => s.rules);
+  const setMessage = useAppStore((s) => s.setMessage);
+  const isFavoriteDomain = useTrafficStore((s) => s.isFavoriteDomain);
+  const isFavoriteClient = useTrafficStore((s) => s.isFavoriteClient);
   const parentRef = useRef<HTMLDivElement>(null);
   const prevSelectedIdRef = useRef<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const virtualizer = useVirtualizer({
     count: sessions.length,
@@ -43,6 +68,43 @@ export function SessionTable({
   const copyUrl = (url: string) => {
     void copyToClipboard(url);
   };
+
+  const openContextMenu = (e: MouseEvent, session: Session) => {
+    e.preventDefault();
+    onSelect(session.id);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      session,
+      column: columnFromTarget(e.target),
+      seq: seqById.get(session.id) ?? 0,
+    });
+  };
+
+  const menuItems = useMemo(() => {
+    if (!contextMenu) return [];
+    const { session, column, seq } = contextMenu;
+    const clientKey = clientGroupKey(session);
+    return buildSessionContextMenu(
+      session,
+      {
+        locale,
+        column,
+        seq,
+        domainFavorited: isFavoriteDomain(session.host),
+        clientFavorited: isFavoriteClient(clientKey),
+        sslEnabled: sessionSslEnabled(rules, session.host),
+        rules,
+      },
+      {
+        onCopyDone: (key) => {
+          setMessage(t(key));
+          setTimeout(() => setMessage(null), 2000);
+        },
+        onCopyError: (msg) => setMessage(msg),
+      },
+    );
+  }, [contextMenu, locale, rules, isFavoriteDomain, isFavoriteClient, t, setMessage]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -83,6 +145,7 @@ export function SessionTable({
                     selected={session.id === selectedId}
                     onClick={() => onSelect(session.id)}
                     onDoubleClick={() => copyUrl(session.url)}
+                    onContextMenu={(e) => openContextMenu(e, session)}
                   />
                 </div>
               );
@@ -90,6 +153,14 @@ export function SessionTable({
           </div>
         )}
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={menuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

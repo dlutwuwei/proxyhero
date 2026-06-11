@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useT } from "../../hooks/useT";
+import { Modal } from "../ui/Modal";
 import type { MapLocalRule, MapRemoteRule } from "../../types";
 import {
   detectMapLocalHeaders,
@@ -21,7 +22,8 @@ function normalizeMatchHost(host: string): string {
 }
 
 function localSourceMode(rule: MapLocalRule): LocalSourceMode {
-  return rule.localBody?.trim() ? "body" : "file";
+  if (rule.localBody !== undefined) return "body";
+  return "file";
 }
 
 function applyDetectedHeaders(
@@ -63,12 +65,38 @@ export function MapRemoteModal({
   if (!open || !draft) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded border border-[#444] bg-[#252526] p-4 shadow-xl">
-        <h3 className="mb-3 text-sm font-medium">
-          {isNew ? t("rules.modal.addRemote") : t("rules.modal.editRemote")}
-        </h3>
-        <div className="space-y-2 text-xs">
+    <Modal
+      open
+      title={isNew ? t("rules.modal.addRemote") : t("rules.modal.editRemote")}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-[#333] px-3 py-1.5 text-xs hover:bg-[#444]"
+          >
+            {t("common.cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const path = draft.matchRule.path?.trim();
+              onSave({
+                ...draft,
+                matchRule: {
+                  ...draft.matchRule,
+                  path: path ? path : undefined,
+                },
+              });
+            }}
+            className="rounded bg-[#094771] px-3 py-1.5 text-xs hover:bg-[#0e5a8a]"
+          >
+            {t("common.save")}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-2 text-xs">
           <label className="block">
             {t("rules.modal.name")}
             <input
@@ -168,33 +196,7 @@ export function MapRemoteModal({
             </label>
           </div>
         </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded bg-[#333] px-3 py-1.5 text-xs hover:bg-[#444]"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const path = draft.matchRule.path?.trim();
-              onSave({
-                ...draft,
-                matchRule: {
-                  ...draft.matchRule,
-                  path: path ? path : undefined,
-                },
-              });
-            }}
-            className="rounded bg-[#094771] px-3 py-1.5 text-xs hover:bg-[#0e5a8a]"
-          >
-            {t("common.save")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -247,12 +249,50 @@ export function MapLocalModal({
   if (!open || !draft) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded border border-[#444] bg-[#252526] p-4 shadow-xl">
-        <h3 className="mb-3 text-sm font-medium">
-          {isNew ? t("rules.modal.addLocal") : t("rules.modal.editLocal")}
-        </h3>
-        <div className="space-y-2 text-xs">
+    <Modal
+      open
+      title={isNew ? t("rules.modal.addLocal") : t("rules.modal.editLocal")}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-[#333] px-3 py-1.5 text-xs hover:bg-[#444]"
+          >
+            {t("common.cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const path = draft.matchRule.path?.trim();
+              const host = normalizeMatchHost(draft.matchRule.host);
+              const next: MapLocalRule = {
+                ...draft,
+                headers: rowsToHeaders(headerRows),
+                autoHeaders: draft.autoHeaders,
+                matchRule: {
+                  ...draft.matchRule,
+                  host,
+                  path: path ? path : undefined,
+                },
+              };
+              if (sourceMode === "body") {
+                next.localBody = draft.localBody?.trim() || "";
+                next.localFile = "";
+              } else {
+                next.localFile = draft.localFile.trim();
+                next.localBody = undefined;
+              }
+              onSave(next);
+            }}
+            className="rounded bg-[#094771] px-3 py-1.5 text-xs hover:bg-[#0e5a8a]"
+          >
+            {t("common.save")}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-2 text-xs">
           <label className="block">
             {t("rules.modal.name")}
             <input
@@ -430,44 +470,6 @@ export function MapLocalModal({
             </div>
           </div>
         </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded bg-[#333] px-3 py-1.5 text-xs hover:bg-[#444]"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const path = draft.matchRule.path?.trim();
-              const host = normalizeMatchHost(draft.matchRule.host);
-              const next: MapLocalRule = {
-                ...draft,
-                headers: rowsToHeaders(headerRows),
-                autoHeaders: draft.autoHeaders,
-                matchRule: {
-                  ...draft.matchRule,
-                  host,
-                  path: path ? path : undefined,
-                },
-              };
-              if (sourceMode === "body") {
-                next.localBody = draft.localBody?.trim() || "";
-                next.localFile = "";
-              } else {
-                next.localFile = draft.localFile.trim();
-                next.localBody = undefined;
-              }
-              onSave(next);
-            }}
-            className="rounded bg-[#094771] px-3 py-1.5 text-xs hover:bg-[#0e5a8a]"
-          >
-            {t("common.save")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

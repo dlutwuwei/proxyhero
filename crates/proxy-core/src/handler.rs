@@ -203,7 +203,7 @@ impl CaptureHandler {
         session_id: &str,
         parts: &http::response::Parts,
         capture_body: &[u8],
-        wire_len: usize,
+        decoded_len: usize,
         duration_ms: u64,
     ) {
         let content_type = parts
@@ -214,8 +214,8 @@ impl CaptureHandler {
         if let Some(session) = sessions.get_mut(session_id) {
             session.status = Some(parts.status.as_u16());
             session.duration_ms = Some(duration_ms);
-            session.response_size = Some(wire_len);
-            let mut res_msg = body_from_bytes(capture_body, content_type, wire_len);
+            session.response_size = Some(decoded_len);
+            let mut res_msg = body_from_bytes(capture_body, content_type, decoded_len);
             res_msg.headers = headers_from_http(&parts.headers);
             session.response = Some(res_msg);
 
@@ -255,8 +255,8 @@ impl CaptureHandler {
     ) -> Response<Body> {
         let (parts, body) = res.into_parts();
         let raw_body = Self::read_full_body(body).await;
-        let wire_len = raw_body.len();
         let decoded_body = decode_content_encoding(&parts.headers, raw_body.clone());
+        let decoded_len = decoded_body.len();
         let capture_body = capture_body_slice(&decoded_body);
         let out = Response::from_parts(parts.clone(), Body::from(raw_body));
         Self::apply_response(
@@ -264,7 +264,7 @@ impl CaptureHandler {
             session_id,
             &parts,
             &capture_body,
-            wire_len,
+            decoded_len,
             duration_ms,
         )
         .await;
@@ -309,8 +309,8 @@ impl HttpHandler for CaptureHandler {
         let started = Instant::now();
         let (mut parts, body) = req.into_parts();
         let raw_body = Self::read_full_body(body).await;
-        let wire_len = raw_body.len();
         let decoded_body = decode_content_encoding(&parts.headers, raw_body.clone());
+        let decoded_len = decoded_body.len();
         let capture_body = capture_body_slice(&decoded_body);
         let body = Body::from(raw_body);
 
@@ -347,8 +347,8 @@ impl HttpHandler for CaptureHandler {
         let user_agent = user_agent_from_headers(&parts.headers);
         session.user_agent = user_agent.clone();
         session.client_name = client_label(user_agent.as_deref());
-        session.request_size = wire_len;
-        let mut req_msg = body_from_bytes(&capture_body, content_type, wire_len);
+        session.request_size = decoded_len;
+        let mut req_msg = body_from_bytes(&capture_body, content_type, decoded_len);
         req_msg.headers = headers_from_http(&parts.headers);
 
         if is_websocket_handshake(&req_msg.headers) || is_websocket_upgrade(&parts.headers) {
@@ -563,8 +563,8 @@ impl HttpHandler for CaptureHandler {
 
         let (parts, body) = res.into_parts();
         let raw_body = Self::read_full_body(body).await;
-        let wire_len = raw_body.len();
         let decoded_body = decode_content_encoding(&parts.headers, raw_body.clone());
+        let decoded_len = decoded_body.len();
         let capture_body = capture_body_slice(&decoded_body);
         let out = Response::from_parts(parts.clone(), Body::from(raw_body));
 
@@ -573,7 +573,7 @@ impl HttpHandler for CaptureHandler {
             &session_id,
             &parts,
             &capture_body,
-            wire_len,
+            decoded_len,
             started.elapsed().as_millis() as u64,
         )
         .await;

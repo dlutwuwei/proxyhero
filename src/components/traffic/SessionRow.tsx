@@ -15,12 +15,14 @@ export function SessionRow({
   selected,
   onClick,
   onDoubleClick,
+  onContextMenu,
 }: {
   session: Session;
   seq: number;
   selected: boolean;
   onClick: () => void;
   onDoubleClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
   const client = session.userAgent?.trim()
@@ -36,22 +38,26 @@ export function SessionRow({
       tabIndex={0}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       className={`flex cursor-pointer items-center gap-2 border-b border-[#2d2d2d] px-2 py-1 text-xs hover:bg-[#2a2d2e] ${
         selected ? "bg-[#094771]/60" : ""
       }`}
     >
-      <span className="mono w-12 shrink-0 text-right text-[#666]">{seq}</span>
-      <span className="mono min-w-0 flex-1 truncate text-[#ccc]" title={session.url}>
+      <span data-col="seq" className="mono w-12 shrink-0 text-right text-[#666]">{seq}</span>
+      <span data-col="url" className="mono min-w-0 flex-1 truncate text-[#ccc]" title={session.url}>
         {session.url}
       </span>
-      <span className="w-28 shrink-0 truncate text-[#888]" title={clientTitle}>
+      <span data-col="client" className="w-28 shrink-0 truncate text-[#888]" title={clientTitle}>
         {client}
       </span>
-      <span className="mono w-16 shrink-0 font-medium text-[#569cd6]">
+      <span data-col="method" className="mono w-16 shrink-0 font-medium text-[#569cd6]">
         {session.isWebSocket ? "WS" : session.method}
       </span>
-      <span className={`flex w-20 shrink-0 items-center gap-1 ${statusColor(session.status)}`}>
+      <span
+        data-col="status"
+        className={`flex w-20 shrink-0 items-center gap-1 ${statusColor(session.status)}`}
+      >
         {!session.completed ? (
           <>
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -72,6 +78,7 @@ export function SessionRow({
         </span>
       )}
       <span
+        data-col="time"
         className="mono w-[72px] shrink-0 text-right text-[#888]"
         title={session.startedAt}
       >

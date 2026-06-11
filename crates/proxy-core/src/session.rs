@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub const MAX_BODY_BYTES: usize = 1024 * 1024;
+pub const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_WS_MESSAGES: usize = 500;
 pub const MAX_WS_PAYLOAD_BYTES: usize = 64 * 1024;
 
@@ -239,6 +239,32 @@ pub fn capture_body_slice(full: &[u8]) -> Vec<u8> {
         full[..MAX_BODY_BYTES].to_vec()
     } else {
         full.to_vec()
+    }
+}
+
+#[cfg(test)]
+mod body_tests {
+    use super::*;
+
+    #[test]
+    fn truncated_uses_decoded_length_not_wire_length() {
+        let decoded = vec![b'a'; MAX_BODY_BYTES + 1];
+        let captured = capture_body_slice(&decoded);
+        let msg = body_from_bytes(&captured, Some("application/json"), decoded.len());
+        assert!(msg.truncated);
+        assert_eq!(msg.size, MAX_BODY_BYTES + 1);
+        assert_eq!(captured.len(), MAX_BODY_BYTES);
+    }
+
+    #[test]
+    fn gzip_wire_shorter_than_decoded_still_marks_truncated() {
+        let decoded = vec![b'x'; MAX_BODY_BYTES + 1];
+        let captured = capture_body_slice(&decoded);
+        let wire_len = 50_000usize;
+        let msg = body_from_bytes(&captured, Some("application/json"), decoded.len());
+        assert!(msg.truncated);
+        assert_eq!(msg.size, decoded.len());
+        assert!(wire_len < captured.len());
     }
 }
 

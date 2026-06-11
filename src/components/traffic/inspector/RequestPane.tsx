@@ -49,7 +49,7 @@ export function RequestPane({ session }: { session: Session }) {
             );
           case "body":
             return (
-              <div className="flex min-h-[120px] flex-col">
+              <div className="flex h-full min-h-0 flex-col">
                 <BodyViewer msg={session.request} fill />
               </div>
             );
@@ -61,7 +61,11 @@ export function RequestPane({ session }: { session: Session }) {
               />
             );
           case "raw":
-            return <RawHttpView text={buildRawRequest(session)} />;
+            return (
+              <div className="flex h-full min-h-0 flex-col">
+                <RawHttpView text={buildRawRequest(session)} />
+              </div>
+            );
           case "summary":
             return (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 p-3 text-xs">
