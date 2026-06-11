@@ -1,5 +1,5 @@
 export const FORMAT_JSON_MAX = 256 * 1024;
-export const BODY_LOAD_WARN_BYTES = 5 * 1024 * 1024;
+export const RESPONSE_BODY_MAX_DISPLAY_BYTES = 2 * 1024 * 1024;
 export const TREE_PARSE_MAX = 4 * 1024 * 1024;
 export const VIRTUAL_LINE_HEIGHT = 20;
 export const VIRTUAL_CHUNK_CHARS = 8192;

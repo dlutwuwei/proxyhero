@@ -1,5 +1,6 @@
 import { BodyViewer } from "../../BodyViewer";
 import { useT } from "../../../hooks/useT";
+import { RESPONSE_BODY_MAX_DISPLAY_BYTES } from "./largeContent";
 import type { Session } from "../../../types";
 import {
   bodyText,
@@ -43,7 +44,13 @@ export function ResponsePane({ session }: { session: Session }) {
           case "body":
             return (
               <div className="flex h-full min-h-0 flex-col">
-                <BodyViewer msg={session.response} fill autoFormat />
+                <BodyViewer
+                  msg={session.response}
+                  fill
+                  autoFormat
+                  maxDisplayBytes={RESPONSE_BODY_MAX_DISPLAY_BYTES}
+                  copyOnlyWhenLarge
+                />
               </div>
             );
           case "raw":
