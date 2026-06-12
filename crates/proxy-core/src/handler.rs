@@ -14,7 +14,10 @@ use hudsucker::tokio_tungstenite::tungstenite::Message;
 use crate::branding::CA_CERT_FILE;
 use crate::client_ua::client_label;
 use crate::map_local::build_response_headers;
-use crate::map_remote::{build_map_remote_forward, forward_map_remote_http, map_remote_uses_direct_http, MapRemoteForward};
+use crate::map_remote::{
+    apply_map_remote_ws_headers, build_map_remote_forward, forward_map_remote_http,
+    map_remote_uses_direct_http, MapRemoteForward,
+};
 use crate::matcher::{find_map_local, find_map_remote, should_mitm_ssl};
 use crate::request_target::{mitm_https_target, resolve_request_target};
 use crate::rules::{is_map_target_allowed, TlsPreset};
@@ -236,7 +239,11 @@ impl CaptureHandler {
                 }
             }
 
-            session.completed = true;
+            if session.is_websocket && parts.status.as_u16() == 101 {
+                session.completed = false;
+            } else {
+                session.completed = true;
+            }
 
             let updated = session.clone();
             drop(sessions);
@@ -384,7 +391,6 @@ impl HttpHandler for CaptureHandler {
             }
         }
         if is_ws {
-            session.status = Some(101);
             session.completed = false;
             tracing::info!(
                 session_id = %session_id,
@@ -542,7 +548,20 @@ impl HttpHandler for CaptureHandler {
             }
         }
 
-        if parts.uri.host().is_none() {
+        if is_ws {
+            if let Ok(parsed) = upstream_url.parse::<hudsucker::hyper::Uri>() {
+                parts.uri = parsed;
+            }
+            if let Some(forward) = map_remote_forward.as_ref() {
+                apply_map_remote_ws_headers(&mut parts.headers, forward);
+            }
+            tracing::info!(
+                session_id = %session_id,
+                upstream_url = %upstream_url,
+                map_remote = map_remote_forward.is_some(),
+                "WebSocket upstream target"
+            );
+        } else if map_remote_forward.is_some() && parts.uri.host().is_none() {
             if let Ok(parsed) = upstream_url.parse::<hudsucker::hyper::Uri>() {
                 parts.uri = parsed;
             }

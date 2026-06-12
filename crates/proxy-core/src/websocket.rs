@@ -5,14 +5,11 @@ use hudsucker::hyper::{HeaderMap, Uri};
 use hudsucker::tokio_tungstenite::tungstenite::Message;
 use hudsucker::WebSocketContext;
 
+use crate::request_target::parse_host_from_header;
 use crate::session::{WebSocketMessage, Session, MAX_WS_MESSAGES, MAX_WS_PAYLOAD_BYTES};
 
 pub fn ws_host_key(authority: &str) -> String {
-    authority
-        .strip_suffix(":443")
-        .or_else(|| authority.strip_suffix(":80"))
-        .unwrap_or(authority)
-        .to_string()
+    parse_host_from_header(authority)
 }
 
 fn ws_session_key(client_addr: SocketAddr, authority: &str, path: &str) -> String {
@@ -269,6 +266,14 @@ mod tests {
     use super::*;
     use crate::session::{apply_websocket_target, HttpMessage, Session};
     use hudsucker::hyper::Uri;
+
+    #[test]
+    fn ws_host_key_strips_nonstandard_port() {
+        assert_eq!(
+            ws_host_key("adminsalesfetest03-2.lkcoffee.com:9000"),
+            "adminsalesfetest03-2.lkcoffee.com"
+        );
+    }
 
     #[test]
     fn key_candidates_normalize_host_port() {

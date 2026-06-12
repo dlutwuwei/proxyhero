@@ -92,6 +92,25 @@ pub fn map_remote_uses_direct_http(forward: &MapRemoteForward) -> bool {
     forward.target_protocol == "http"
 }
 
+pub fn map_remote_origin(forward: &MapRemoteForward) -> String {
+    format!("{}://{}", forward.target_protocol, forward.host_header)
+}
+
+pub fn apply_map_remote_ws_headers(headers: &mut http::HeaderMap, forward: &MapRemoteForward) {
+    let origin = map_remote_origin(forward);
+    if let Ok(host_val) = http::HeaderValue::from_str(&forward.host_header) {
+        headers.insert(http::header::HOST, host_val);
+    }
+    if let Ok(origin_val) = http::HeaderValue::from_str(&origin) {
+        headers.insert(http::header::ORIGIN, origin_val);
+    }
+    if headers.contains_key(http::header::REFERER) {
+        if let Ok(ref_val) = http::HeaderValue::from_str(&format!("{origin}/")) {
+            headers.insert(http::header::REFERER, ref_val);
+        }
+    }
+}
+
 fn should_skip_forward_header(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
