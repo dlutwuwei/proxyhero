@@ -1,8 +1,40 @@
 export const FORMAT_JSON_MAX = 256 * 1024;
 export const RESPONSE_BODY_MAX_DISPLAY_BYTES = 2 * 1024 * 1024;
-export const TREE_PARSE_MAX = 4 * 1024 * 1024;
 export const VIRTUAL_LINE_HEIGHT = 20;
+export const RAW_VIRTUAL_LINE_HEIGHT = 20;
 export const VIRTUAL_CHUNK_CHARS = 8192;
+export const MONO_CHAR_WIDTH_PX = 7.2;
+export const VIRTUAL_GUTTER_WIDTH_PX = 40;
+export const VIRTUAL_ROW_PADDING_PX = 16;
+
+export function estimateWrappedLineRows(
+  line: string,
+  containerWidth: number,
+  gutter: boolean,
+): number {
+  const reserved =
+    VIRTUAL_ROW_PADDING_PX + (gutter ? VIRTUAL_GUTTER_WIDTH_PX + 8 : 0);
+  const contentWidth = Math.max(32, containerWidth - reserved);
+  const charsPerRow = Math.max(
+    1,
+    Math.floor(contentWidth / MONO_CHAR_WIDTH_PX),
+  );
+  if (!line) return 1;
+  return Math.max(1, Math.ceil(line.length / charsPerRow));
+}
+
+export function estimateWrappedLineHeight(
+  line: string,
+  containerWidth: number,
+  gutter: boolean,
+  lineHeight: number,
+): number {
+  return estimateWrappedLineRows(line, containerWidth, gutter) * lineHeight;
+}
+
+export function textByteSize(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
 
 export function formatBodyText(
   raw: string,
@@ -36,24 +68,4 @@ export function splitVirtualLines(text: string): string[] {
     chunks.push(text.slice(i, i + VIRTUAL_CHUNK_CHARS));
   }
   return chunks;
-}
-
-export function countJsonNodes(value: unknown, limit = 50_000): number {
-  let n = 0;
-  const walk = (v: unknown) => {
-    if (n > limit) return;
-    if (v === null || typeof v !== "object") {
-      n += 1;
-      return;
-    }
-    if (Array.isArray(v)) {
-      n += 1;
-      for (const item of v) walk(item);
-      return;
-    }
-    n += 1;
-    for (const val of Object.values(v as Record<string, unknown>)) walk(val);
-  };
-  walk(value);
-  return n;
 }

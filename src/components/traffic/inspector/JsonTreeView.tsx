@@ -1,11 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useT } from "../../../hooks/useT";
-import {
-  countJsonNodes,
-  TREE_PARSE_MAX,
-  VIRTUAL_LINE_HEIGHT,
-} from "./largeContent";
+import { VIRTUAL_LINE_HEIGHT } from "./largeContent";
 
 type Row =
   | {
@@ -23,9 +19,17 @@ type Row =
       name?: string;
       text: string;
       valueClass: string;
+    }
+  | {
+      kind: "loadMore";
+      id: string;
+      depth: number;
+      path: string;
+      remaining: number;
     };
 
-const MAX_TREE_NODES = 50_000;
+const INITIAL_CHILD_BATCH = 64;
+const LOAD_MORE_BATCH = 128;
 
 function leafText(value: unknown): { text: string; valueClass: string } {
   if (value === null) return { text: "null", valueClass: "text-[#569cd6]" };
@@ -43,16 +47,19 @@ function leafText(value: unknown): { text: string; valueClass: string } {
   return { text: String(value), valueClass: "text-[#d4d4d4]" };
 }
 
+function childLimit(path: string, loadedCounts: Map<string, number>): number {
+  return loadedCounts.get(path) ?? INITIAL_CHILD_BATCH;
+}
+
 function buildRows(
   value: unknown,
   expanded: Set<string>,
+  loadedCounts: Map<string, number>,
   path: string,
   depth: number,
   name: string | undefined,
   rows: Row[],
 ): void {
-  if (rows.length >= MAX_TREE_NODES) return;
-
   if (value === null || typeof value !== "object") {
     const { text, valueClass } = leafText(value);
     rows.push({
@@ -76,9 +83,28 @@ function buildRows(
       size: value.length,
     });
     if (!expanded.has(path)) return;
-    value.forEach((item, i) => {
-      buildRows(item, expanded, `${path}.${i}`, depth + 1, String(i), rows);
-    });
+    const limit = childLimit(path, loadedCounts);
+    const count = Math.min(value.length, limit);
+    for (let i = 0; i < count; i++) {
+      buildRows(
+        value[i],
+        expanded,
+        loadedCounts,
+        `${path}.${i}`,
+        depth + 1,
+        String(i),
+        rows,
+      );
+    }
+    if (count < value.length) {
+      rows.push({
+        kind: "loadMore",
+        id: `${path}.__load_more__`,
+        depth: depth + 1,
+        path,
+        remaining: value.length - count,
+      });
+    }
     return;
   }
 
@@ -92,9 +118,20 @@ function buildRows(
     size: entries.length,
   });
   if (!expanded.has(path)) return;
-  for (const [k, v] of entries) {
-    if (rows.length >= MAX_TREE_NODES) break;
-    buildRows(v, expanded, `${path}.${k}`, depth + 1, k, rows);
+  const limit = childLimit(path, loadedCounts);
+  const count = Math.min(entries.length, limit);
+  for (let i = 0; i < count; i++) {
+    const [k, v] = entries[i];
+    buildRows(v, expanded, loadedCounts, `${path}.${k}`, depth + 1, k, rows);
+  }
+  if (count < entries.length) {
+    rows.push({
+      kind: "loadMore",
+      id: `${path}.__load_more__`,
+      depth: depth + 1,
+      path,
+      remaining: entries.length - count,
+    });
   }
 }
 
@@ -102,33 +139,57 @@ function defaultExpanded(): Set<string> {
   return new Set(["root"]);
 }
 
+type ParseState = "idle" | "loading" | "ok" | "error";
+
 export function JsonTreeView({ text }: { text: string }) {
   const t = useT();
   const parentRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
-
-  const parsed = useMemo(() => {
-    if (!text.trim() || text.length > TREE_PARSE_MAX) return null;
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      return null;
-    }
-  }, [text]);
-
-  const nodeCount = useMemo(
-    () => (parsed != null ? countJsonNodes(parsed) : 0),
-    [parsed],
+  const [loadedCounts, setLoadedCounts] = useState<Map<string, number>>(
+    () => new Map(),
   );
+  const [parseState, setParseState] = useState<ParseState>("idle");
+  const [parsed, setParsed] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (!text.trim()) {
+      setParseState("idle");
+      setParsed(null);
+      return;
+    }
+    setParseState("loading");
+    setParsed(null);
+    setExpanded(null);
+    setLoadedCounts(new Map());
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      try {
+        const value = JSON.parse(text) as unknown;
+        if (!cancelled) {
+          setParsed(value);
+          setParseState("ok");
+        }
+      } catch {
+        if (!cancelled) {
+          setParsed(null);
+          setParseState("error");
+        }
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [text]);
 
   const activeExpanded = expanded ?? defaultExpanded();
 
   const rows = useMemo(() => {
-    if (parsed == null) return [];
+    if (parseState !== "ok" || parsed == null) return [];
     const list: Row[] = [];
-    buildRows(parsed, activeExpanded, "root", 0, undefined, list);
+    buildRows(parsed, activeExpanded, loadedCounts, "root", 0, undefined, list);
     return list;
-  }, [parsed, activeExpanded]);
+  }, [parsed, activeExpanded, loadedCounts, parseState]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -145,26 +206,18 @@ export function JsonTreeView({ text }: { text: string }) {
     );
   }
 
-  if (text.length > TREE_PARSE_MAX) {
+  if (parseState === "loading") {
     return (
-      <div className="p-4 text-sm text-[#888]">
-        {t("traffic.inspector.treeTooLarge")}
+      <div className="flex h-full items-center justify-center p-4 text-sm text-[#888]">
+        {t("traffic.inspector.treeParsing")}
       </div>
     );
   }
 
-  if (parsed == null) {
+  if (parseState === "error" || parsed == null) {
     return (
       <div className="p-4 text-sm text-[#888]">
         {t("traffic.inspector.invalidJson")}
-      </div>
-    );
-  }
-
-  if (nodeCount > MAX_TREE_NODES) {
-    return (
-      <div className="p-4 text-sm text-[#888]">
-        {t("traffic.inspector.treeTooManyNodes", { count: nodeCount })}
       </div>
     );
   }
@@ -174,6 +227,15 @@ export function JsonTreeView({ text }: { text: string }) {
       const next = new Set(prev ?? activeExpanded);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const loadMore = (path: string) => {
+    setLoadedCounts((prev) => {
+      const next = new Map(prev);
+      const current = next.get(path) ?? INITIAL_CHILD_BATCH;
+      next.set(path, current + LOAD_MORE_BATCH);
       return next;
     });
   };
@@ -212,6 +274,17 @@ export function JsonTreeView({ text }: { text: string }) {
                     <span className="text-[#9cdcfe]">{row.name}: </span>
                   ) : null}
                   {row.container === "array" ? `[${row.size}]` : `{${row.size}}`}
+                </button>
+              ) : row.kind === "loadMore" ? (
+                <button
+                  type="button"
+                  onClick={() => loadMore(row.path)}
+                  className="mono w-full truncate text-left text-xs text-[#3794ff] hover:text-[#6cb6ff]"
+                  style={{ paddingLeft: row.depth * 12 + 8 }}
+                >
+                  {t("traffic.inspector.treeLoadMore", {
+                    remaining: row.remaining,
+                  })}
                 </button>
               ) : (
                 <div

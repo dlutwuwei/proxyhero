@@ -56,7 +56,11 @@ export function ResponsePane({ session }: { session: Session }) {
           case "raw":
             return (
               <div className="flex h-full min-h-0 flex-col">
-                <RawHttpView text={buildRawResponse(session)} />
+                <RawHttpView
+                  text={buildRawResponse(session)}
+                  maxDisplayBytes={RESPONSE_BODY_MAX_DISPLAY_BYTES}
+                  copyOnlyWhenLarge
+                />
               </div>
             );
           case "tree":
