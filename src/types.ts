@@ -86,6 +86,7 @@ export interface MapToTarget {
 export type SslMode = "default" | "include" | "exclude";
 
 export interface SslConfig {
+  enabled?: boolean;
   mode: SslMode;
   includeHosts: string[];
   excludeHosts: string[];

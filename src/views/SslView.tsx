@@ -1,7 +1,7 @@
 import { api } from "../api/tauri";
 import { useT } from "../hooks/useT";
 import { useAppStore } from "../stores/appStore";
-import type { SslMode } from "../types";
+import { normalizeSslHost } from "../utils/sslHosts";
 
 export function SslView() {
   const t = useT();
@@ -18,13 +18,23 @@ export function SslView() {
     setTimeout(() => setMessage(null), 2000);
   };
 
-  const setMode = (mode: SslMode) =>
-    save({ ...rules, ssl: { ...rules.ssl, mode } });
-
   const addHost = (list: "includeHosts" | "excludeHosts", host: string) => {
-    if (!host.trim()) return;
-    const arr = [...rules.ssl[list], host.trim()];
-    save({ ...rules, ssl: { ...rules.ssl, [list]: arr } });
+    const normalized = normalizeSslHost(host);
+    if (!normalized) return;
+    if (rules.ssl[list].includes(normalized)) return;
+    const ssl = { ...rules.ssl };
+    if (list === "includeHosts") {
+      ssl.excludeHosts = ssl.excludeHosts.filter(
+        (h) => normalizeSslHost(h) !== normalized,
+      );
+      ssl.includeHosts = [...ssl.includeHosts, normalized];
+    } else {
+      ssl.includeHosts = ssl.includeHosts.filter(
+        (h) => normalizeSslHost(h) !== normalized,
+      );
+      ssl.excludeHosts = [...ssl.excludeHosts, normalized];
+    }
+    save({ ...rules, ssl });
   };
 
   const removeHost = (list: "includeHosts" | "excludeHosts", host: string) => {
@@ -37,31 +47,10 @@ export function SslView() {
     });
   };
 
-  const modes: { mode: SslMode; labelKey: "ssl.mode.default" | "ssl.mode.include" | "ssl.mode.exclude" }[] = [
-    { mode: "default", labelKey: "ssl.mode.default" },
-    { mode: "include", labelKey: "ssl.mode.include" },
-    { mode: "exclude", labelKey: "ssl.mode.exclude" },
-  ];
-
   return (
     <div className="overflow-auto p-4">
       <h2 className="mb-4 text-lg font-medium">{t("ssl.title")}</h2>
       <p className="mb-4 text-sm text-[#888]">{t("ssl.desc")}</p>
-
-      <div className="mb-6 flex gap-2">
-        {modes.map(({ mode, labelKey }) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setMode(mode)}
-            className={`rounded px-3 py-1.5 text-sm ${
-              rules.ssl.mode === mode ? "bg-[#094771]" : "bg-[#333]"
-            }`}
-          >
-            {t(labelKey)}
-          </button>
-        ))}
-      </div>
 
       <HostList
         title={t("ssl.includeTitle")}

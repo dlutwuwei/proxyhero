@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::branding::{CA_CERT_FILE, CA_COMMON_NAME, CA_KEY_FILE, CA_ORG_NAME};
 use crate::ca::IpAwareRcgenAuthority;
@@ -9,7 +10,8 @@ use hudsucker::rcgen::{
 };
 use hudsucker::rustls::crypto::aws_lc_rs;
 use hudsucker::Proxy;
-use time::{Duration, OffsetDateTime};
+use time::{Duration as TimeDuration, OffsetDateTime};
+use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -31,7 +33,7 @@ impl ProxyServer {
     }
 
     pub fn is_running(&self) -> bool {
-        self.handle.is_some()
+        self.handle.as_ref().is_some_and(|h| !h.is_finished())
     }
 
     pub async fn start(
@@ -43,17 +45,22 @@ impl ProxyServer {
         if self.is_running() {
             return Err("proxy already running".into());
         }
+        // 清理已退出但仍占位的 handle
+        self.handle = None;
+        self.shutdown_tx = None;
 
         init_tracing();
         tracing::info!(port, "starting proxy server");
 
         let ca = load_or_create_ca(cert_dir)?;
         let handler = CaptureHandler::new(state);
-        // 0.0.0.0：本机浏览器 + 局域网设备（真机 Wi-Fi 代理）均可连接
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        let listener = TcpListener::bind(addr)
+            .await
+            .map_err(|e| format!("bind {addr}: {e}"))?;
         let (tx, rx) = oneshot::channel::<()>();
         let proxy = Proxy::builder()
-            .with_addr(addr)
+            .with_listener(listener)
             .with_ca(ca)
             .with_rustls_connector(aws_lc_rs::default_provider())
             .with_http_handler(handler.clone())
@@ -76,12 +83,32 @@ impl ProxyServer {
     }
 
     pub async fn stop(&mut self) {
+        self.stop_inner(false).await;
+    }
+
+    pub async fn stop_forced(&mut self) {
+        self.stop_inner(true).await;
+    }
+
+    async fn stop_inner(&mut self, force: bool) {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
         }
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.await;
+        if let Some(mut handle) = self.handle.take() {
+            if force {
+                handle.abort();
+                let _ = handle.await;
+            } else {
+                tokio::select! {
+                    _ = &mut handle => {}
+                    _ = tokio::time::sleep(Duration::from_millis(800)) => {
+                        handle.abort();
+                        let _ = handle.await;
+                    }
+                }
+            }
         }
+        tokio::time::sleep(Duration::from_millis(if force { 80 } else { 50 })).await;
     }
 }
 
@@ -97,8 +124,8 @@ fn load_or_create_ca(cert_dir: &Path) -> Result<IpAwareRcgenAuthority, String> {
         }
         let mut params = CertificateParams::new(vec![]).map_err(|e| e.to_string())?;
         let now = OffsetDateTime::now_utc();
-        params.not_before = now - Duration::days(1);
-        params.not_after = now + Duration::days(365 * 10);
+        params.not_before = now - TimeDuration::days(1);
+        params.not_after = now + TimeDuration::days(365 * 10);
         params
             .distinguished_name
             .push(DnType::CommonName, CA_COMMON_NAME);

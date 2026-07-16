@@ -124,7 +124,7 @@ export const useTrafficStore = create<TrafficStore>((set, get) => ({
   sideSelection: null,
   searchText: "",
   autoSelect: false,
-  showConnectRequests: loadBool(SHOW_CONNECT_KEY, false),
+  showConnectRequests: loadBool(SHOW_CONNECT_KEY, true),
   inspectorHeight: loadInspectorHeight(),
   sidebarWidth: loadSidebarWidth(),
   favoriteDomains: loadStringList(FAVORITE_DOMAINS_KEY),

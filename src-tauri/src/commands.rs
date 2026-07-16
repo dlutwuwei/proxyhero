@@ -1,5 +1,6 @@
 use proxy_core::{
-    builtin_presets, AppRules, Preset, Session, SessionEvent, SharedState, CA_CERT_FILE,
+    builtin_presets, sanitize_ssl_config, AppRules, Preset, Session, SessionEvent, SharedState,
+    CA_CERT_FILE,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -117,10 +118,18 @@ pub async fn get_rules(state: State<'_, AppState>) -> Result<AppRules, String> {
 }
 
 #[tauri::command]
-pub async fn save_rules_cmd(state: State<'_, AppState>, rules: AppRules) -> Result<(), String> {
+pub async fn save_rules_cmd(state: State<'_, AppState>, mut rules: AppRules) -> Result<(), String> {
+    sanitize_ssl_config(&mut rules.ssl);
+    let ssl_changed = {
+        let current = state.rules.lock().await;
+        current.ssl != rules.ssl
+    };
     save_rules(&rules_path(&state.data_dir), &rules).await?;
     *state.rules.lock().await = rules.clone();
     state.sync_rules_to_proxy().await;
+    if ssl_changed {
+        state.restart_proxy_if_running().await?;
+    }
     Ok(())
 }
 
@@ -165,9 +174,17 @@ pub async fn apply_preset(
             rules.ssl.exclude_hosts.push(host);
         }
     }
+    sanitize_ssl_config(&mut rules.ssl);
+    let ssl_changed = {
+        let current = state.rules.lock().await;
+        current.ssl != rules.ssl
+    };
     save_rules(&rules_path(&state.data_dir), &rules).await?;
     *state.rules.lock().await = rules.clone();
     state.sync_rules_to_proxy().await;
+    if ssl_changed {
+        state.restart_proxy_if_running().await?;
+    }
     Ok(rules)
 }
 

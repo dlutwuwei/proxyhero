@@ -143,9 +143,11 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SslConfig {
+    #[serde(default)]
+    pub enabled: bool,
     pub mode: SslMode,
     pub include_hosts: Vec<String>,
     pub exclude_hosts: Vec<String>,
@@ -154,6 +156,7 @@ pub struct SslConfig {
 impl Default for SslConfig {
     fn default() -> Self {
         Self {
+            enabled: false,
             mode: SslMode::Default,
             include_hosts: vec![],
             exclude_hosts: vec!["*.apple.com".to_string(), "*.mzstatic.com".to_string()],
@@ -161,7 +164,7 @@ impl Default for SslConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum SslMode {
     Default,

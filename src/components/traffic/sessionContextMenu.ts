@@ -5,7 +5,7 @@ import { useAppStore } from "../../stores/appStore";
 import { useTrafficStore } from "../../stores/trafficStore";
 import type { AppRules, Session } from "../../types";
 import { copyToClipboard } from "../../utils/clipboard";
-import { enableSslForHost, isSslEnabledForHost } from "../../utils/sslHosts";
+import { enableSslForHost, disableSslForHost, isSslEnabledForHost } from "../../utils/sslHosts";
 import { formatSessionTime } from "../../utils/formatTime";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { buildRawRequest, buildRawResponse } from "./httpInspectorUtils";
@@ -154,6 +154,10 @@ export function buildSessionContextMenu(
   ];
 
   const clientKey = clientGroupKey(session);
+  const showSslActions =
+    session.isHttps ||
+    session.scheme === "https" ||
+    session.method.toUpperCase() === "CONNECT";
 
   return [
     {
@@ -231,15 +235,22 @@ export function buildSessionContextMenu(
       items: exportItems,
     },
     { type: "separator" },
-    {
-      type: "item",
-      label: sslEnabled
-        ? t(locale, "traffic.context.sslEnabled")
-        : t(locale, "traffic.context.enableSsl"),
-      disabled: sslEnabled || !state.rules,
-      onClick: () => void enableSsl(session, locale, handlers),
-    },
-    { type: "separator" },
+    ...(showSslActions
+      ? [
+          {
+            type: "item" as const,
+            label: sslEnabled
+              ? t(locale, "traffic.context.disableSsl")
+              : t(locale, "traffic.context.enableSsl"),
+            disabled: !state.rules,
+            onClick: () =>
+              void (sslEnabled
+                ? disableSsl(session, locale, handlers)
+                : enableSsl(session, locale, handlers)),
+          },
+          { type: "separator" as const },
+        ]
+      : []),
     {
       type: "item",
       label: t(locale, "traffic.context.delete"),
@@ -257,6 +268,21 @@ async function enableSsl(
   const { rules, loadRules, setMessage } = useAppStore.getState();
   if (!rules) return;
   const next = enableSslForHost(rules, session.host);
+  await api.saveRules(next);
+  await loadRules();
+  handlers.onSslSaved?.();
+  setMessage(translate(locale, "ssl.saved"));
+  setTimeout(() => setMessage(null), 2000);
+}
+
+async function disableSsl(
+  session: Session,
+  locale: Locale,
+  handlers: SessionContextHandlers,
+) {
+  const { rules, loadRules, setMessage } = useAppStore.getState();
+  if (!rules) return;
+  const next = disableSslForHost(rules, session.host);
   await api.saveRules(next);
   await loadRules();
   handlers.onSslSaved?.();

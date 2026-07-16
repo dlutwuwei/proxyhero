@@ -30,4 +30,28 @@ impl AppState {
         let rules = self.rules.lock().await.clone();
         *self.shared.rules.write().await = rules;
     }
+
+    pub async fn restart_proxy_if_running(&self) -> Result<bool, String> {
+        let port = self.config.lock().await.proxy_port;
+        let cdir = cert_dir(&self.data_dir);
+        let mut server = self.proxy_server.lock().await;
+        if !server.is_running() {
+            return Ok(false);
+        }
+        tracing::info!("restarting proxy to apply SSL rule changes");
+        server.stop_forced().await;
+        let mut last_err = None;
+        for attempt in 0..5 {
+            match server.start(port, &cdir, self.shared.clone()).await {
+                Ok(()) => return Ok(true),
+                Err(e) => {
+                    tracing::warn!(attempt, error = %e, "proxy restart bind failed, retrying");
+                    last_err = Some(e);
+                    tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1) as u64))
+                        .await;
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| "proxy restart failed".into()))
+    }
 }

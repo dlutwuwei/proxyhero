@@ -11,7 +11,16 @@ pub fn normalize_host(value: &str) -> String {
     if let Some((host, _)) = v.split_once('/') {
         v = host.to_string();
     }
-    v.trim_end_matches('/').to_string()
+    let v = v.trim_end_matches('/').to_string();
+    if v.starts_with('[') {
+        return v;
+    }
+    if let Some((host, port)) = v.rsplit_once(':') {
+        if !host.is_empty() && port.chars().all(|c| c.is_ascii_digit()) {
+            return host.to_string();
+        }
+    }
+    v
 }
 
 pub fn host_matches(pattern: &str, host: &str) -> bool {
@@ -93,11 +102,104 @@ pub fn find_map_local<'a>(
 }
 
 pub fn should_mitm_ssl(ssl: &SslConfig, host: &str) -> bool {
-    match ssl.mode {
-        SslMode::Default => !ssl.exclude_hosts.iter().any(|p| host_matches(p, host)),
-        SslMode::Include => ssl.include_hosts.iter().any(|p| host_matches(p, host)),
-        SslMode::Exclude => !ssl.exclude_hosts.iter().any(|p| host_matches(p, host)),
+    let host = normalize_host(host);
+    if host.is_empty() {
+        return false;
     }
+
+    let in_include = ssl
+        .include_hosts
+        .iter()
+        .any(|p| host_matches(p, &host));
+    if !in_include {
+        return false;
+    }
+
+    // 精确 Include 始终解密，避免曾写入 Exclude 后无法再解密
+    let exact_include = ssl.include_hosts.iter().any(|p| {
+        let p = normalize_host(p);
+        !p.contains('*') && !p.contains('?') && p == host
+    });
+    if exact_include {
+        return true;
+    }
+
+    // 通配 Include 可被 Exclude 裁剪
+    !ssl.exclude_hosts.iter().any(|p| host_matches(p, &host))
+}
+
+fn dedupe_hosts(hosts: Vec<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    for host in hosts {
+        if !out.contains(&host) {
+            out.push(host);
+        }
+    }
+    out
+}
+
+fn sanitize_ssl_host_list(list: &[String]) -> Vec<String> {
+    dedupe_hosts(
+        list.iter()
+            .map(|h| normalize_host(h))
+            .filter(|h| !h.is_empty())
+            .collect(),
+    )
+}
+
+pub fn sanitize_ssl_config(ssl: &mut SslConfig) {
+    ssl.include_hosts = sanitize_ssl_host_list(&ssl.include_hosts);
+    ssl.exclude_hosts = sanitize_ssl_host_list(&ssl.exclude_hosts);
+}
+
+pub fn add_ssl_include_host(ssl: &mut SslConfig, host: &str) {
+    let host = normalize_host(host);
+    if host.is_empty() {
+        return;
+    }
+    remove_ssl_exclude_host(ssl, &host);
+    if ssl.include_hosts.iter().any(|p| host_matches(p, &host)) {
+        return;
+    }
+    ssl.include_hosts.push(host);
+}
+
+pub fn add_ssl_exclude_host(ssl: &mut SslConfig, host: &str) {
+    let host = normalize_host(host);
+    if host.is_empty() {
+        return;
+    }
+    remove_ssl_include_host(ssl, &host);
+    if ssl.exclude_hosts.iter().any(|p| host_matches(p, &host)) {
+        return;
+    }
+    ssl.exclude_hosts.push(host);
+}
+
+pub fn remove_ssl_exclude_host(ssl: &mut SslConfig, host: &str) {
+    let host = normalize_host(host);
+    if host.is_empty() {
+        return;
+    }
+    ssl.exclude_hosts.retain(|p| {
+        if p.contains('*') || p.contains('?') {
+            return true;
+        }
+        !host_matches(p, &host)
+    });
+}
+
+pub fn remove_ssl_include_host(ssl: &mut SslConfig, host: &str) {
+    let host = normalize_host(host);
+    if host.is_empty() {
+        return;
+    }
+    ssl.include_hosts.retain(|p| {
+        if p.contains('*') || p.contains('?') {
+            return true;
+        }
+        !host_matches(p, &host)
+    });
 }
 
 #[cfg(test)]
@@ -114,6 +216,143 @@ mod tests {
             "https://trackstream.example.com/",
             "trackstream.example.com"
         ));
+    }
+
+    #[test]
+    fn sanitize_strips_url_path_from_exclude() {
+        let mut ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Default,
+            include_hosts: vec![],
+            exclude_hosts: vec![
+                "https://adminsalesfetest03.lkcoffee.com/tentacle/displaySpace/list/popTactics"
+                    .into(),
+            ],
+        };
+        sanitize_ssl_config(&mut ssl);
+        assert_eq!(
+            ssl.exclude_hosts,
+            vec!["adminsalesfetest03.lkcoffee.com".to_string()]
+        );
+        assert!(!should_mitm_ssl(&ssl, "adminsalesfetest03.lkcoffee.com"));
+    }
+
+    #[test]
+    fn add_and_remove_ssl_exclude_host() {
+        let mut ssl = SslConfig::default();
+        add_ssl_exclude_host(
+            &mut ssl,
+            "https://adminsalesfetest03.lkcoffee.com/path",
+        );
+        assert!(ssl
+            .exclude_hosts
+            .contains(&"adminsalesfetest03.lkcoffee.com".to_string()));
+        remove_ssl_exclude_host(&mut ssl, "adminsalesfetest03.lkcoffee.com");
+        assert!(!ssl
+            .exclude_hosts
+            .contains(&"adminsalesfetest03.lkcoffee.com".to_string()));
+    }
+
+    #[test]
+    fn ssl_disabled_only_includes_mitm() {
+        let ssl = SslConfig {
+            enabled: false,
+            mode: SslMode::Default,
+            include_hosts: vec!["api.example.com".into()],
+            exclude_hosts: vec![],
+        };
+        assert!(!should_mitm_ssl(&ssl, "other.example.com"));
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+    }
+
+    #[test]
+    fn ssl_default_mode_only_includes_mitm() {
+        let ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Default,
+            include_hosts: vec!["api.example.com".into()],
+            exclude_hosts: vec![],
+        };
+        assert!(!should_mitm_ssl(&ssl, "other.example.com"));
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+    }
+
+    #[test]
+    fn ssl_exact_include_wins_over_exclude() {
+        let ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Default,
+            include_hosts: vec!["api.example.com".into()],
+            exclude_hosts: vec!["api.example.com".into()],
+        };
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+    }
+
+    #[test]
+    fn ssl_wildcard_include_can_be_carved_by_exclude() {
+        let ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Default,
+            include_hosts: vec!["*.example.com".into()],
+            exclude_hosts: vec!["ads.example.com".into()],
+        };
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+        assert!(!should_mitm_ssl(&ssl, "ads.example.com"));
+    }
+
+    #[test]
+    fn ssl_exclude_mode_still_only_includes_mitm() {
+        let ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Exclude,
+            include_hosts: vec!["api.example.com".into()],
+            exclude_hosts: vec!["*.apple.com".into()],
+        };
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+        assert!(!should_mitm_ssl(&ssl, "other.example.com"));
+        assert!(!should_mitm_ssl(&ssl, "foo.apple.com"));
+    }
+
+    #[test]
+    fn ssl_remove_from_include_stops_mitm() {
+        let mut ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Exclude,
+            include_hosts: vec!["api.example.com".into()],
+            exclude_hosts: vec![],
+        };
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+        remove_ssl_include_host(&mut ssl, "api.example.com");
+        assert!(!should_mitm_ssl(&ssl, "api.example.com"));
+    }
+
+    #[test]
+    fn ssl_add_include_after_exclude_decrypts() {
+        let mut ssl = SslConfig {
+            enabled: true,
+            mode: SslMode::Default,
+            include_hosts: vec![],
+            exclude_hosts: vec!["api.example.com".into()],
+        };
+        assert!(!should_mitm_ssl(&ssl, "api.example.com"));
+        add_ssl_include_host(&mut ssl, "api.example.com");
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+        assert!(!ssl.exclude_hosts.iter().any(|h| h == "api.example.com"));
+    }
+
+    #[test]
+    fn ssl_wildcard_include_needs_exclude_to_disable() {
+        let mut ssl = SslConfig {
+            enabled: false,
+            mode: SslMode::Default,
+            include_hosts: vec!["*.example.com".into()],
+            exclude_hosts: vec![],
+        };
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+        remove_ssl_include_host(&mut ssl, "api.example.com");
+        assert!(should_mitm_ssl(&ssl, "api.example.com"));
+        add_ssl_exclude_host(&mut ssl, "api.example.com");
+        assert!(!should_mitm_ssl(&ssl, "api.example.com"));
     }
 
     #[test]
